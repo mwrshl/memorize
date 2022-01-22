@@ -1,0 +1,6 @@
+model
+images
+verses.yaml
+reviews.yaml
+mem.log
+__pycache__
