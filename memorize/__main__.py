@@ -69,6 +69,14 @@ def score_review_priority(reviews) -> int:
                 frequency += Duration(hours=6)
             elif ReviewPrompAspect.ENDING_UNDERSCORE in r.prompt:
                 frequency += Duration(hours=6)
+    if (len(reviews) > 2
+            and reviews[-1].result == ReviewResult.EASY
+            and reviews[-2].result == ReviewResult.EASY):
+        a = pendulum.instance(reviews[-2].date)
+        b = pendulum.instance(reviews[-1].date)
+        d = b.diff(a) * 1.5
+        if d > frequency:
+            frequency = d
     if last_easy:
         due_date = last_easy.date + frequency
     else:
@@ -79,9 +87,14 @@ def score_review_priority(reviews) -> int:
             due_date = min_due_date
     now = pendulum.now()
     if now > due_date:
-        return (10 + (now - due_date).days, due_date)
+        return (10 + (now - due_date).days, due_date, frequency)
     else:
-        return (0, due_date)
+        return (0, due_date, frequency)
+
+
+def print_frequencies(frequencies):
+    for reference, frequency in sorted(frequencies.items()):
+        print(reference, frequency.days, "days,", frequency.hours, "hours")
 
 
 def print_date_histogram(dates: list[DateTime]):
@@ -103,16 +116,19 @@ def review_candidates():
 
     results = []
     due_dates = []
+    frequencies = {}
     for reference, reviews in reviews_by_reference.items():
         reviews.sort(key=lambda r: r.date)
         if reviews:
             last_review = reviews[-1]
         else:
             last_review = None
-        score, due_date = score_review_priority(reviews)
+        score, due_date, frequency = score_review_priority(reviews)
+        frequencies[reference] = frequency
         due_dates.append(due_date)
         if score:
             results.append((score, reference, last_review))
+    print_frequencies(frequencies)
     print_date_histogram(due_dates)
     results.sort(key=lambda prio_ref: (-prio_ref[0], prio_ref[1]))
     return results
