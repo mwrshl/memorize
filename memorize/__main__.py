@@ -36,7 +36,7 @@ def save():
 
 def score_review_priority(reviews) -> int:
     if not reviews:
-        return (1, (pendulum.now() - Duration(seconds=1)))
+        return (1, (pendulum.now() - Duration(seconds=1)), Duration(hours=0))
     reviews.sort(key=lambda r: r.date)
     frequency = Duration(hours=6)
     last_easy = None
