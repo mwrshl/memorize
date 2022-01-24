@@ -1,0 +1,12 @@
+cattrs
+click
+contractions
+fuzzy
+fuzzywuzzy
+metaphone
+nltk
+pendulum
+readchar
+sounddevice
+vosk
+yaml
