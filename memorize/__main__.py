@@ -35,62 +35,100 @@ def save():
         yaml.dump(converter.unstructure(all_reviews), f)
 
 
-def score_review_priority(reviews) -> int:
-    if not reviews:
-        return (1, (pendulum.now() - Duration(seconds=1)), Duration(hours=0))
-    reviews.sort(key=lambda r: r.date)
-    frequency = Duration(hours=6)
-    last_easy = None
-    last_hard_or_failed = None
-    previous_easy = None
-    for r in reviews:
-        if frequency < Duration(hours=6):
-            frequency = Duration(hours=6)
-        if r.result == ReviewResult.FAIL:
-            last_hard_or_failed = r
-            frequency -= Duration(hours=6)
-        elif r.result == ReviewResult.HARD:
-            last_hard_or_failed = r
-            frequency -= Duration(hours=4)
-        elif r.result == ReviewResult.EASY:
-            last_easy = r
-            if previous_easy and (r.date - previous_easy.date) < Duration(hours=4):
-                previous_easy = r
-                continue
-            previous_easy = r
-            if ReviewPrompAspect.BLIND in r.prompt:
-                frequency += Duration(hours=24)
-            elif ReviewPrompAspect.FIRST_WORD in r.prompt:
-                frequency += Duration(hours=12)
-            elif ReviewPrompAspect.FIRST_LETTERS in r.prompt:
-                frequency += Duration(hours=6)
-            elif ReviewPrompAspect.FIRST_LETTERS_EVERY_OTHER_1 in r.prompt:
-                frequency += Duration(hours=6)
-            elif ReviewPrompAspect.FIRST_LETTERS_EVERY_OTHER_2 in r.prompt:
-                frequency += Duration(hours=6)
-            elif ReviewPrompAspect.ENDING_UNDERSCORE in r.prompt:
-                frequency += Duration(hours=6)
-    if (len(reviews) > 2
-            and reviews[-1].result == ReviewResult.EASY
-            and reviews[-2].result == ReviewResult.EASY):
-        a = pendulum.instance(reviews[-2].date)
-        b = pendulum.instance(reviews[-1].date)
-        d = b.diff(a) * 1.5
-        if d > frequency:
-            frequency = d
-    if last_easy:
-        due_date = last_easy.date + frequency
-    else:
-        due_date = pendulum.now() - Duration(seconds=1)
-    if last_hard_or_failed:
-        min_due_date = last_hard_or_failed.date + Duration(hours=2)
-        if min_due_date > due_date:
-            due_date = min_due_date
-    now = pendulum.now()
-    if now > due_date:
-        return (10 + (now - due_date).days, due_date, frequency)
-    else:
-        return (0, due_date, frequency)
+class ReviewScore:
+    def __init__(self, reference, reviews):
+        self.reference = reference
+        self.score = 1
+        self.due = pendulum.now() - Duration(seconds=1)
+        self.frequency = Duration(hours=0)
+        self.last_easy = None
+        self.last_hard_or_failed = None
+        self.fails_in_a_row = 0
+        self.easys_in_a_row = 0
+        self.previous_easy = None
+        self.purgatory_countdown = 0
+        self.prompt = None
+        reviews.sort(key=lambda r: r.date)
+        prev = None
+        for r in reviews:
+            self.feed(r, prev)
+            prev = r
+        self.finalize(reviews)
+
+    def feed(self, review, previous_review):
+        if review.result == ReviewResult.FAIL:
+            self.fails_in_a_row += 1
+            if self.purgatory_countdown:
+                self.purgatory_countdown = 5
+            elif self.fails_in_a_row == 2:
+                self.purgatory_countdown = 5
+        else:
+            self.fails_in_a_row = 0
+        if review.result == ReviewResult.EASY:
+            self.easys_in_a_row += 1
+            if self.purgatory_countdown:
+                self.purgatory_countdown -= 1
+        else:
+            self.easys_in_a_row = 0
+        if self.purgatory_countdown:
+            self.prompt = {ReviewPrompAspect.REFERENCE,
+                           ReviewPrompAspect.FIRST_LETTERS}
+            self.frequency = Duration(hours=6)
+        else:
+            self.prompt = review.prompt
+
+        if (review.result == ReviewResult.EASY
+                and previous_review
+                and previous_review.result == ReviewResult.EASY):
+            a = pendulum.instance(previous_review.date)
+            b = pendulum.instance(review.date)
+            d = b.diff(a) * 1.5
+            if d > self.frequency:
+                self.frequency = d
+
+        if self.frequency < Duration(hours=6):
+            self.frequency = Duration(hours=6)
+        if review.result == ReviewResult.FAIL:
+            self.last_hard_or_failed = review
+            self.frequency -= Duration(hours=6)
+        elif review.result == ReviewResult.HARD:
+            self.last_hard_or_failed = review
+            self.frequency -= Duration(hours=4)
+        elif review.result == ReviewResult.EASY:
+            self.last_easy = review
+            if self.previous_easy and (review.date - self.previous_easy.date) < Duration(hours=4):
+                self.previous_easy = review
+                return
+            self.previous_easy = review
+            if ReviewPrompAspect.BLIND in review.prompt:
+                self.frequency += Duration(hours=24)
+            elif ReviewPrompAspect.FIRST_WORD in review.prompt:
+                self.frequency += Duration(hours=12)
+            elif ReviewPrompAspect.FIRST_LETTERS in review.prompt:
+                self.frequency += Duration(hours=6)
+            elif ReviewPrompAspect.FIRST_LETTERS_EVERY_OTHER_1 in review.prompt:
+                self.frequency += Duration(hours=6)
+            elif ReviewPrompAspect.FIRST_LETTERS_EVERY_OTHER_2 in review.prompt:
+                self.frequency += Duration(hours=6)
+            elif ReviewPrompAspect.ENDING_UNDERSCORE in review.prompt:
+                self.frequency += Duration(hours=6)
+
+    def finalize(self, reviews):
+        if self.last_easy:
+            self.due_date = self.last_easy.date + self.frequency
+        else:
+            self.score = 1
+            self.due_date = pendulum.now() - Duration(seconds=1)
+            return
+        if self.last_hard_or_failed:
+            min_due_date = self.last_hard_or_failed.date + Duration(hours=2)
+            if min_due_date > self.due_date:
+                self.due_date = min_due_date
+        now = pendulum.now()
+        if now > self.due_date:
+            self.score = 10 + (now - self.due_date).days
+        else:
+            self.score = 0
 
 
 def print_frequencies(frequencies):
@@ -120,18 +158,14 @@ def review_candidates():
     frequencies = {}
     for reference, reviews in reviews_by_reference.items():
         reviews.sort(key=lambda r: r.date)
-        if reviews:
-            last_review = reviews[-1]
-        else:
-            last_review = None
-        score, due_date, frequency = score_review_priority(reviews)
-        frequencies[reference] = frequency
-        due_dates.append(due_date)
-        if score:
-            results.append((score, reference, last_review))
+        score = ReviewScore(reference, reviews)
+        frequencies[reference] = score.frequency
+        due_dates.append(score.due_date)
+        if score.score:
+            results.append(score)
     print_frequencies(frequencies)
     print_date_histogram(due_dates)
-    results.sort(key=lambda prio_ref: (-prio_ref[0], prio_ref[1]))
+    results.sort(key=lambda s: (-s.score, s.reference))
     return results
 
 
@@ -208,9 +242,9 @@ def do_review(ref, prompt):
     return original_res
 
 
-def do_increasing_difficulty_review(ref, last_review):
-    if last_review:
-        prompt = last_review.prompt.copy()
+def do_increasing_difficulty_review(score: ReviewScore):
+    if score.prompt:
+        prompt = score.prompt.copy()
         # Always show the reference for the moment
         prompt.add(ReviewPrompAspect.REFERENCE)
     else:
@@ -220,10 +254,12 @@ def do_increasing_difficulty_review(ref, last_review):
     if prompt.intersection(depricated_text_prompts):
         prompt = step_down_difficulty(prompt)
 
+    ref = score.reference
+
     if not image_exists(ref):
         prompt.discard(ReviewPrompAspect.IMAGE)
     res = do_review(ref, prompt)
-    if res == ReviewResult.EASY:
+    if res == ReviewResult.EASY and score.purgatory_countdown == 0:
         new_prompt = step_up_difficulty(prompt)
         if new_prompt != prompt:
             do_review(ref, new_prompt)
@@ -235,15 +271,15 @@ def review(count: int):
     candidates = review_candidates()
     num_due = 0
     num_new = 0
-    for prio, ref, last_review in candidates:
-        if prio > 1:
+    for score in candidates:
+        if score.score > 1:
             num_due += 1
-        elif prio == 1:
+        elif score.score == 1:
             num_new += 1
     print(
         f"Reviewing {min(count, num_due)} of {num_due} due and {num_new} new")
-    for prio, ref, last_review in candidates[:count]:
-        do_increasing_difficulty_review(ref, last_review)
+    for score in candidates[:count]:
+        do_increasing_difficulty_review(score)
 
 
 if __name__ == "__main__":
