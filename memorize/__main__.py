@@ -14,7 +14,8 @@ from . audio import get_audio
 
 from . reviews import (Reference, verses, ReviewPrompAspect,
                        Review, ReviewResponseAspect, ReviewResult,
-                       step_up_difficulty)
+                       step_up_difficulty, step_down_difficulty,
+                       depricated_text_prompts)
 
 from . prompt import show_prompt, image_exists
 
@@ -216,6 +217,9 @@ def do_increasing_difficulty_review(ref, last_review):
         prompt = {ReviewPrompAspect.REFERENCE,
                   ReviewPrompAspect.FULL_TEXT,
                   ReviewPrompAspect.IMAGE, }
+    if prompt.intersection(depricated_text_prompts):
+        prompt = step_down_difficulty(prompt)
+
     if not image_exists(ref):
         prompt.discard(ReviewPrompAspect.IMAGE)
     res = do_review(ref, prompt)

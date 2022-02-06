@@ -43,6 +43,9 @@ def _first_letters(text, should_show=lambda idx: True):
     n w c h A F
     >>> _first_letters("Every Other Word", lambda i: i%2)
     _ O _
+    >>> _first_letters("And God said that it was good.",
+    ...                lambda i: not (i//4)%2)
+    A G s t _ _ _
     """
     for c in "\"“”.,?!—":
         text = text.replace(c, " ")
@@ -85,6 +88,9 @@ def show_prompt(ref, prompt):
 
     if ReviewPrompAspect.FIRST_LETTERS_EVERY_OTHER_2 in prompt:
         _first_letters(text, lambda idx: (idx % 2) == 1)
+
+    if ReviewPrompAspect.FIRST_LETTERS_EVERY_4 in prompt:
+        _first_letters(text, lambda idx: ((idx//4) % 2) == 0)
 
     if ReviewPrompAspect.FIRST_WORD in prompt:
         tokens = word_tokenize(text)

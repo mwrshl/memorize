@@ -45,20 +45,49 @@ class ReviewPrompAspect(enum.Enum):
     FIRST_LETTERS = "first-letters"
     FIRST_LETTERS_EVERY_OTHER_1 = "first-letters-1"
     FIRST_LETTERS_EVERY_OTHER_2 = "first-letters-2"
+    FIRST_LETTERS_EVERY_4 = "first-letters-4"
     FIRST_WORD = "first-word"
     BLIND = "blind"
 
 
 text_prompt_levels = [
     ReviewPrompAspect.FULL_TEXT,
-    # ReviewPrompAspect.MIDDLE_UNDERSCORE,
     ReviewPrompAspect.ENDING_UNDERSCORE,
     ReviewPrompAspect.FIRST_LETTERS,
+    ReviewPrompAspect.FIRST_LETTERS_EVERY_4,
     ReviewPrompAspect.FIRST_LETTERS_EVERY_OTHER_1,
     ReviewPrompAspect.FIRST_LETTERS_EVERY_OTHER_2,
     ReviewPrompAspect.FIRST_WORD,
     ReviewPrompAspect.BLIND,
 ]
+
+depricated_text_prompts = {
+    ReviewPrompAspect.FIRST_LETTERS_EVERY_OTHER_1,
+    ReviewPrompAspect.FIRST_LETTERS_EVERY_OTHER_2,
+}
+
+
+def step_down_difficulty(aspects):
+    new_aspects = set()
+    non_text_prompt_aspects = set()
+    text_level_found = False
+    for a in aspects:
+        if a in text_prompt_levels:
+            text_level_found = True
+            index = text_prompt_levels.index(a)
+            index -= 1
+            if index < 0:
+                index = 0
+            # Assumes that the min is not depricated
+            while text_prompt_levels[index] in depricated_text_prompts:
+                index -= 1
+            new_aspects.add(text_prompt_levels[index])
+        else:
+            non_text_prompt_aspects.add(a)
+    if not text_level_found:
+        new_aspects.add(text_prompt_levels[0])
+    new_aspects.update(non_text_prompt_aspects)
+    return new_aspects
 
 
 def step_up_difficulty(aspects):
@@ -75,6 +104,9 @@ def step_up_difficulty(aspects):
             if index >= len(text_prompt_levels):
                 index = len(text_prompt_levels) - 1
                 text_level_maxed = True
+            # Assumes that that the max is not depricated
+            while text_prompt_levels[index] in depricated_text_prompts:
+                index += 1
             new_aspects.add(text_prompt_levels[index])
         else:
             non_text_prompt_aspects.add(a)
