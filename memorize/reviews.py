@@ -30,9 +30,15 @@ class Reference:
         else:
             return f"{self.book} {self.chapter}:{self.verse}"
 
+    def verse_count(self):
+        return self.verse_end - self.verse + 1
+
 
 verses = dict((Reference.parse(k), v) for k, v in yaml.load(
     open("verses.yaml"), Loader=yaml.SafeLoader).items())
+
+verse_count = sum(r.verse_count() for r in verses)
+print(f"Loaded {verse_count} verses")
 
 
 @enum.unique
