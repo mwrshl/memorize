@@ -26,6 +26,7 @@ converter.register_unstructure_hook(Reference, lambda r: str(r))
 reviews_yaml = yaml.load(open("reviews.yaml"), Loader=yaml.SafeLoader)
 if reviews_yaml:
     all_reviews = converter.structure(reviews_yaml, list[Review])
+    all_reviews.sort(key=lambda r: r.date)
 else:
     all_reviews = []
 
@@ -79,7 +80,8 @@ class ReviewScore:
 
         if (review.result == ReviewResult.EASY
                 and previous_review
-                and previous_review.result == ReviewResult.EASY):
+                and previous_review.result == ReviewResult.EASY
+                and not self.purgatory_countdown):
             a = pendulum.instance(previous_review.date)
             b = pendulum.instance(review.date)
             d = b.diff(a) * 1.5
