@@ -2,10 +2,12 @@ import attr
 import cattr
 import cattr.preconf.json
 import re
+import os.path
 import yaml
 import enum
 import pendulum
-from typing import Set
+from typing import FrozenSet
+import peewee
 
 
 @attr.frozen(order=True)
@@ -139,25 +141,106 @@ class ReviewResult(enum.Enum):
     EASY = "easy"
 
 
-@attr.define
+@attr.frozen(order=True)
 class Review:
     reference: Reference
     date: pendulum.DateTime
-    prompt: Set[ReviewPrompAspect]
-    response: Set[ReviewResponseAspect]
+    prompt: FrozenSet[ReviewPrompAspect]
+    response: FrozenSet[ReviewResponseAspect]
     result: ReviewResult
 
 
 converter = cattr.preconf.json.make_converter()
-converter.register_structure_hook(Reference, lambda s, _: Reference.parse(s))
+converter.register_structure_hook(
+    Reference, lambda s, _: Reference.parse(s))
 converter.register_unstructure_hook(Reference, lambda r: str(r))
 
-reviews_yaml = yaml.load(open("reviews.yaml"), Loader=yaml.SafeLoader)
-if reviews_yaml:
-    all_reviews = converter.structure(reviews_yaml, list[Review])
-    all_reviews.sort(key=lambda r: r.date)
-else:
-    all_reviews = []
+
+def load_yaml():
+    if not os.path.exists("reviews.yaml"):
+        return []
+    reviews_yaml = yaml.load(open("reviews.yaml"), Loader=yaml.SafeLoader)
+    if reviews_yaml:
+        reviews = converter.structure(reviews_yaml, list[Review])
+        reviews.sort(key=lambda r: r.date)
+    else:
+        reviews = []
+    return reviews
+
+
+yaml_reviews = load_yaml()
+
+
+db = peewee.SqliteDatabase("reviews.db")
+
+
+class ReferenceModel(peewee.Model):
+    book = peewee.CharField()
+    chapter = peewee.IntegerField()
+    verse = peewee.IntegerField()
+    verse_end = peewee.IntegerField()
+
+    class Meta:
+        database = db
+
+    def to_reference(self):
+        return Reference(self.book, self.chapter, self.verse, self.verse_end)
+
+
+class ReviewModel(peewee.Model):
+    reference = peewee.ForeignKeyField(ReferenceModel, backref="reviews")
+    date = peewee.DateTimeField()
+    prompt = peewee.CharField()
+    response = peewee.CharField()
+    result = peewee.CharField()
+
+    class Meta:
+        database = db
+
+    def to_review(self):
+        return Review(self.reference.to_reference(),
+                      pendulum.parse(self.date),
+                      frozenset(ReviewPrompAspect(s)
+                                for s in self.prompt.split(",")),
+                      frozenset(ReviewResponseAspect(s)
+                                for s in self.response.split(",")),
+                      ReviewResult(self.result))
+
+
+db.connect()
+db.create_tables([ReferenceModel, ReviewModel])
+
+
+def load_sqlite():
+    for m in ReviewModel.select():
+        yield m.to_review()
+
+
+def save_review_sqlite(r):
+    reference, created = ReferenceModel.get_or_create(
+        book=r.reference.book,
+        chapter=r.reference.chapter,
+        verse=r.reference.verse,
+        verse_end=r.reference.verse_end)
+    m = ReviewModel.create(
+        reference=reference,
+        date=str(r.date),
+        prompt=",".join(e.value for e in r.prompt),
+        response=",".join(e.value for e in r.response),
+        result=r.result.value)
+    m.save()
+
+
+sqlite_reviews = set(load_sqlite())
+
+for r in yaml_reviews:
+    if r not in sqlite_reviews:
+        print("saving to sqlite")
+        save_review_sqlite(r)
+        sqlite_reviews.add(r)
+
+all_reviews = list(sqlite_reviews)
+all_reviews.sort(key=lambda r: r.date)
 
 
 def save():
@@ -166,5 +249,6 @@ def save():
 
 
 def save_review(r):
+    save_review_sqlite(r)
     all_reviews.append(r)
-    save()
+    # save()

@@ -231,7 +231,7 @@ def do_review(ref, prompt):
 
 def do_increasing_difficulty_review(score: ReviewScore):
     if score.prompt:
-        prompt = score.prompt.copy()
+        prompt = set(score.prompt)
         # Always show the reference for the moment
         prompt.add(ReviewPrompAspect.REFERENCE)
     else:
