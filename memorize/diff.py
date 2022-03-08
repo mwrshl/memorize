@@ -193,6 +193,9 @@ def fuzzydiff(expected, got):
     ...     disappearing, and the true light is already shining.''',
     ...     ' yeah it is also do').appears_unfinished()
     True
+    >>> fuzzydiff("i want all of you to share",
+    ...     "i want all of you you too  share").int_score()
+    100
     """
     logging.info(f"fuzzydiff({repr(expected)}, {repr(got)})")
     expected_tokens = tokenize(expected)
@@ -213,8 +216,12 @@ def fuzzydiff(expected, got):
         if tag == "equal":
             extend(ChunkType.GOOD, expected)
         elif tag == "insert":
-            if not all(t.normalized in fudge_words for t in got):
-                extend(ChunkType.REMOVE, got)
+            if len(got) == 1 and j1 > 0 and got_tokens[j1-1] == got[0]:
+                # ignore duplicate word
+                continue
+            if all(t.normalized in fudge_words for t in got):
+                continue
+            extend(ChunkType.REMOVE, got)
         elif tag == "delete":
             if all(t.normalized in fudge_words for t in expected):
                 extend(ChunkType.CLOSE, expected)
@@ -249,5 +256,3 @@ if __name__ == "__main__":
 
     import doctest
     doctest.testmod()
-    res = fuzzydiff('Anyone who denies the Son doesn’t have the Father, either. But anyone who acknowledges the Son has the Father also.', ' anyone who denies his son does not have the father either but anyone who acknowledges his son has a father also')
-    res.print()
