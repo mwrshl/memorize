@@ -1,5 +1,7 @@
-import re
 import attr
+import cattr
+import cattr.preconf.json
+import re
 import yaml
 import enum
 import pendulum
@@ -67,7 +69,7 @@ text_prompt_levels = [
     ReviewPrompAspect.BLIND,
 ]
 
-depricated_text_prompts = {
+deprecated_text_prompts = {
     ReviewPrompAspect.FIRST_LETTERS_EVERY_OTHER_1,
     ReviewPrompAspect.FIRST_LETTERS_EVERY_OTHER_2,
 }
@@ -84,8 +86,8 @@ def step_down_difficulty(aspects):
             index -= 1
             if index < 0:
                 index = 0
-            # Assumes that the min is not depricated
-            while text_prompt_levels[index] in depricated_text_prompts:
+            # Assumes that the min is not deprecated
+            while text_prompt_levels[index] in deprecated_text_prompts:
                 index -= 1
             new_aspects.add(text_prompt_levels[index])
         else:
@@ -111,7 +113,7 @@ def step_up_difficulty(aspects):
                 index = len(text_prompt_levels) - 1
                 text_level_maxed = True
             # Assumes that that the max is not depricated
-            while text_prompt_levels[index] in depricated_text_prompts:
+            while text_prompt_levels[index] in deprecated_text_prompts:
                 index += 1
             new_aspects.add(text_prompt_levels[index])
         else:
@@ -144,3 +146,25 @@ class Review:
     prompt: Set[ReviewPrompAspect]
     response: Set[ReviewResponseAspect]
     result: ReviewResult
+
+
+converter = cattr.preconf.json.make_converter()
+converter.register_structure_hook(Reference, lambda s, _: Reference.parse(s))
+converter.register_unstructure_hook(Reference, lambda r: str(r))
+
+reviews_yaml = yaml.load(open("reviews.yaml"), Loader=yaml.SafeLoader)
+if reviews_yaml:
+    all_reviews = converter.structure(reviews_yaml, list[Review])
+    all_reviews.sort(key=lambda r: r.date)
+else:
+    all_reviews = []
+
+
+def save():
+    with open("reviews.yaml", "wt") as f:
+        yaml.dump(converter.unstructure(all_reviews), f)
+
+
+def save_review(r):
+    all_reviews.append(r)
+    save()

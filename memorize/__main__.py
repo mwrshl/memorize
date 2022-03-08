@@ -1,7 +1,4 @@
-import yaml
 import pendulum
-import cattr
-import cattr.preconf.json
 import click
 import time
 from pendulum import Duration, DateTime
@@ -12,28 +9,13 @@ from . diff import fuzzydiff
 from . audio import get_audio
 
 
-from . reviews import (Reference, verses, ReviewPrompAspect,
+from . reviews import (verses, ReviewPrompAspect,
                        Review, ReviewResponseAspect, ReviewResult,
                        step_up_difficulty, step_down_difficulty,
-                       depricated_text_prompts)
+                       deprecated_text_prompts,
+                       all_reviews, save_review)
 
 from . prompt import show_prompt, image_exists
-
-converter = cattr.preconf.json.make_converter()
-converter.register_structure_hook(Reference, lambda s, _: Reference.parse(s))
-converter.register_unstructure_hook(Reference, lambda r: str(r))
-
-reviews_yaml = yaml.load(open("reviews.yaml"), Loader=yaml.SafeLoader)
-if reviews_yaml:
-    all_reviews = converter.structure(reviews_yaml, list[Review])
-    all_reviews.sort(key=lambda r: r.date)
-else:
-    all_reviews = []
-
-
-def save():
-    with open("reviews.yaml", "wt") as f:
-        yaml.dump(converter.unstructure(all_reviews), f)
 
 
 class ReviewScore:
@@ -236,8 +218,7 @@ def do_review(ref, prompt):
         response={ReviewResponseAspect.READ_ALOUD},
         result=res
     )
-    all_reviews.append(r)
-    save()
+    save_review(r)
 
     original_res = res
 
@@ -257,7 +238,7 @@ def do_increasing_difficulty_review(score: ReviewScore):
         prompt = {ReviewPrompAspect.REFERENCE,
                   ReviewPrompAspect.FULL_TEXT,
                   ReviewPrompAspect.IMAGE, }
-    if prompt.intersection(depricated_text_prompts):
+    if prompt.intersection(deprecated_text_prompts):
         prompt = step_down_difficulty(prompt)
 
     ref = score.reference
