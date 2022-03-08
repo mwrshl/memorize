@@ -84,7 +84,7 @@ class ReviewScore:
                 and not self.purgatory_countdown):
             a = pendulum.instance(previous_review.date)
             b = pendulum.instance(review.date)
-            d = b.diff(a) * 1.5
+            d = b.diff(a) * 1.4
             if d > self.frequency:
                 self.frequency = d
 
@@ -93,9 +93,13 @@ class ReviewScore:
         if review.result == ReviewResult.FAIL:
             self.last_hard_or_failed = review
             self.frequency -= Duration(hours=6)
+            if self.frequency > Duration(days=1):
+                self.frequency *= .3
         elif review.result == ReviewResult.HARD:
             self.last_hard_or_failed = review
             self.frequency -= Duration(hours=4)
+            if self.frequency > Duration(days=1):
+                self.frequency *= .7
         elif review.result == ReviewResult.EASY:
             self.last_easy = review
             if self.previous_easy and (review.date - self.previous_easy.date) < Duration(hours=4):
