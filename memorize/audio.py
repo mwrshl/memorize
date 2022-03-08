@@ -43,9 +43,9 @@ def get_audio(test_finished):
                 sys.stdout.write("listening for more...\r")
             else:
                 partial = json.loads(rec.PartialResult())["partial"]
-                if so_far and not partial:
+                if so_far and len(so_far) > 3 and not partial:
                     empty_partial_count += 1
-                    if empty_partial_count > 20:
+                    if empty_partial_count > 40:
                         break
                 # if partial:
                 # sys.stdout.write(f"{partial[-79:]}\r")
