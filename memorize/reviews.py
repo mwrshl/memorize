@@ -53,9 +53,11 @@ class ReviewPrompAspect(enum.Enum):
     MIDDLE_UNDERSCORE = "middle-underscore"
     ENDING_UNDERSCORE = "ending-underscore"
     FIRST_LETTERS = "first-letters"
-    FIRST_LETTERS_EVERY_OTHER_1 = "first-letters-1"
-    FIRST_LETTERS_EVERY_OTHER_2 = "first-letters-2"
-    FIRST_LETTERS_EVERY_4 = "first-letters-4"
+    FIRST_LETTERS_1 = "first-letters-1"
+    FIRST_LETTERS_2 = "first-letters-2"
+    FIRST_LETTERS_3 = "first-letters-3"
+    FIRST_LETTERS_4 = "first-letters-4"
+    FIRST_LETTERS_5 = "first-letters-5"
     FIRST_WORD = "first-word"
     BLIND = "blind"
 
@@ -64,17 +66,16 @@ text_prompt_levels = [
     ReviewPrompAspect.FULL_TEXT,
     ReviewPrompAspect.ENDING_UNDERSCORE,
     ReviewPrompAspect.FIRST_LETTERS,
-    ReviewPrompAspect.FIRST_LETTERS_EVERY_4,
-    ReviewPrompAspect.FIRST_LETTERS_EVERY_OTHER_1,
-    ReviewPrompAspect.FIRST_LETTERS_EVERY_OTHER_2,
+    ReviewPrompAspect.FIRST_LETTERS_1,
+    ReviewPrompAspect.FIRST_LETTERS_2,
+    ReviewPrompAspect.FIRST_LETTERS_3,
+    ReviewPrompAspect.FIRST_LETTERS_4,
+    ReviewPrompAspect.FIRST_LETTERS_5,
     ReviewPrompAspect.FIRST_WORD,
     ReviewPrompAspect.BLIND,
 ]
 
-deprecated_text_prompts = {
-    ReviewPrompAspect.FIRST_LETTERS_EVERY_OTHER_1,
-    ReviewPrompAspect.FIRST_LETTERS_EVERY_OTHER_2,
-}
+deprecated_text_prompts = {}
 
 
 def step_down_difficulty(aspects):

@@ -87,13 +87,9 @@ class ReviewScore:
             elif ReviewPrompAspect.FIRST_WORD in review.prompt:
                 self.frequency += Duration(hours=12)
             elif ReviewPrompAspect.FIRST_LETTERS in review.prompt:
-                self.frequency += Duration(hours=6)
-            elif ReviewPrompAspect.FIRST_LETTERS_EVERY_OTHER_1 in review.prompt:
-                self.frequency += Duration(hours=6)
-            elif ReviewPrompAspect.FIRST_LETTERS_EVERY_OTHER_2 in review.prompt:
-                self.frequency += Duration(hours=6)
+                self.frequency = Duration(hours=6)
             elif ReviewPrompAspect.ENDING_UNDERSCORE in review.prompt:
-                self.frequency += Duration(hours=6)
+                self.frequency = Duration(hours=6)
 
     def finalize(self, reviews):
         if self.last_easy:
@@ -249,11 +245,17 @@ def do_increasing_difficulty_review(score: ReviewScore):
 
     if not image_exists(ref):
         prompt.discard(ReviewPrompAspect.IMAGE)
-    res = do_review(ref, prompt)
-    if res == ReviewResult.EASY and score.purgatory_countdown == 0:
+
+    for i in range(3):
+        res = do_review(ref, prompt)
+        if res != ReviewResult.EASY:
+            break
+        if score.purgatory_countdown != 0:
+            break
         new_prompt = step_up_difficulty(prompt)
-        if new_prompt != prompt:
-            do_review(ref, new_prompt)
+        if new_prompt == prompt:
+            break
+        prompt = new_prompt
 
 
 @ click.command()

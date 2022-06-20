@@ -83,14 +83,20 @@ def show_prompt(ref, prompt):
     if ReviewPrompAspect.FIRST_LETTERS in prompt:
         _first_letters(text, lambda idx: True)
 
-    if ReviewPrompAspect.FIRST_LETTERS_EVERY_OTHER_1 in prompt:
-        _first_letters(text, lambda idx: (idx % 2) == 0)
+    if ReviewPrompAspect.FIRST_LETTERS_1 in prompt:
+        _first_letters(text, lambda idx: (idx % 5) < 4)
 
-    if ReviewPrompAspect.FIRST_LETTERS_EVERY_OTHER_2 in prompt:
-        _first_letters(text, lambda idx: (idx % 2) == 1)
+    if ReviewPrompAspect.FIRST_LETTERS_2 in prompt:
+        _first_letters(text, lambda idx: (idx % 5) < 3)
 
-    if ReviewPrompAspect.FIRST_LETTERS_EVERY_4 in prompt:
-        _first_letters(text, lambda idx: ((idx//4) % 2) == 0)
+    if ReviewPrompAspect.FIRST_LETTERS_3 in prompt:
+        _first_letters(text, lambda idx: (idx % 5) < 2)
+
+    if ReviewPrompAspect.FIRST_LETTERS_4 in prompt:
+        _first_letters(text, lambda idx: (idx % 5) < 1)
+
+    if ReviewPrompAspect.FIRST_LETTERS_5 in prompt:
+        _first_letters(text, lambda idx: ((idx//5) % 2) == 0)
 
     if ReviewPrompAspect.FIRST_WORD in prompt:
         tokens = word_tokenize(text)
