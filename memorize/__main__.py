@@ -10,7 +10,7 @@ from . audio import get_audio
 
 
 from . reviews import (verses, ReviewPrompAspect,
-                       Review, ReviewResponseAspect, ReviewResult,
+                       Review, Reference, ReviewResponseAspect, ReviewResult,
                        step_up_difficulty, step_down_difficulty,
                        deprecated_text_prompts,
                        all_reviews, save_review)
@@ -27,7 +27,6 @@ class ReviewScore:
         self.last_easy = None
         self.last_hard_or_failed = None
         self.fails_in_a_row = 0
-        self.easys_in_a_row = 0
         self.previous_easy = None
         self.purgatory_countdown = 0
         self.prompt = None
@@ -36,6 +35,8 @@ class ReviewScore:
         for r in reviews:
             self.feed(r, prev)
             prev = r
+            if reference == Reference("Rom", 8, 13, 13):
+                print(r.result, self.frequency, self.prompt)
         self.finalize(reviews)
 
     def feed(self, review, previous_review):
@@ -48,27 +49,14 @@ class ReviewScore:
         else:
             self.fails_in_a_row = 0
         if review.result == ReviewResult.EASY:
-            self.easys_in_a_row += 1
             if self.purgatory_countdown:
                 self.purgatory_countdown -= 1
-        else:
-            self.easys_in_a_row = 0
         if self.purgatory_countdown:
             self.prompt = {ReviewPrompAspect.REFERENCE,
                            ReviewPrompAspect.FIRST_LETTERS}
             self.frequency = Duration(hours=6)
         else:
             self.prompt = review.prompt
-
-        if (review.result == ReviewResult.EASY
-                and previous_review
-                and previous_review.result == ReviewResult.EASY
-                and not self.purgatory_countdown):
-            a = pendulum.instance(previous_review.date)
-            b = pendulum.instance(review.date)
-            d = b.diff(a) * 1.4
-            if d > self.frequency:
-                self.frequency = d
 
         if self.frequency < Duration(hours=6):
             self.frequency = Duration(hours=6)
@@ -90,6 +78,12 @@ class ReviewScore:
             self.previous_easy = review
             if ReviewPrompAspect.BLIND in review.prompt:
                 self.frequency += Duration(hours=24)
+                if previous_review and previous_review.result == ReviewResult.EASY:
+                    a = pendulum.instance(previous_review.date)
+                    b = pendulum.instance(review.date)
+                    d = b.diff(a) * 1.32
+                    if d > self.frequency:
+                        self.frequency = d
             elif ReviewPrompAspect.FIRST_WORD in review.prompt:
                 self.frequency += Duration(hours=12)
             elif ReviewPrompAspect.FIRST_LETTERS in review.prompt:
@@ -113,6 +107,10 @@ class ReviewScore:
             if min_due_date > self.due_date:
                 self.due_date = min_due_date
         now = pendulum.now()
+        if self.last_easy:
+            self.ratio = (now - self.last_easy.date) / (self.due_date - self.last_easy.date)
+        else:
+            self.ratio = 0
         if now > self.due_date:
             self.score = 10 + (now - self.due_date).days
         else:
@@ -139,8 +137,12 @@ def review_candidates():
         reviews_by_reference[reference] = []
 
     for review in all_reviews:
-        reviews_by_reference[review.reference].append(review)
+        try:
+            reviews_by_reference[review.reference].append(review)
+        except KeyError:
+            pass
 
+    scores_by_reference = {}
     results = []
     due_dates = []
     frequencies = {}
@@ -149,11 +151,13 @@ def review_candidates():
         score = ReviewScore(reference, reviews)
         frequencies[reference] = score.frequency
         due_dates.append(score.due_date)
+        scores_by_reference[reference] = score
         if score.score:
             results.append(score)
     print_frequencies(frequencies)
     print_date_histogram(due_dates)
-    results.sort(key=lambda s: (-s.score, s.reference))
+    # results.sort(key=lambda s: (-s.score, s.reference))
+    results.sort(key=lambda s: s.reference)
     return results
 
 
@@ -265,7 +269,9 @@ def review(count: int):
             num_new += 1
     print(
         f"Reviewing {min(count, num_due)} of {num_due} due and {num_new} new")
-    for score in candidates[:count]:
+    candidates = candidates[:count]
+    for i, score in enumerate(candidates):
+        print("#"*i + "-"*(len(candidates)-i))
         do_increasing_difficulty_review(score)
 
 
