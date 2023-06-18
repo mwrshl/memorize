@@ -1,5 +1,6 @@
 import pendulum
 import click
+import collections
 import time
 from pendulum import Duration, DateTime
 import logging
@@ -22,6 +23,7 @@ class ReviewScore:
     def __init__(self, reference, reviews):
         self.reference = reference
         self.score = 1
+        self.review_bucket = 0
         self.due = pendulum.now() - Duration(seconds=1)
         self.frequency = Duration(hours=0)
         self.last_easy = None
@@ -92,20 +94,32 @@ class ReviewScore:
                 self.frequency = Duration(hours=6)
 
     def finalize(self, reviews):
+        self.review_bucket = 5
+        if self.frequency < Duration(days=3):
+            self.review_bucket = 2
+        elif self.frequency < Duration(weeks=1):
+            self.review_bucket = 3
+        elif self.frequency < Duration(weeks=3):
+            self.review_bucket = 4
         if self.last_easy:
             self.due_date = self.last_easy.date + self.frequency
         else:
             self.score = 1
+            self.review_bucket = 1
             self.due_date = pendulum.now() - Duration(seconds=1)
             return
         if self.last_hard_or_failed:
             min_due_date = self.last_hard_or_failed.date + Duration(hours=2)
             if min_due_date > self.due_date:
                 self.due_date = min_due_date
+            if self.last_easy and self.last_easy.date < self.last_hard_or_failed.date:
+                self.review_bucket = 1
         now = pendulum.now()
         if self.last_easy:
-            self.ratio = (now - self.last_easy.date) / (self.due_date - self.last_easy.date)
+            self.ratio = (now - self.last_easy.date) / \
+                (self.due_date - self.last_easy.date)
         else:
+            self.review_bucket = 0
             self.ratio = 0
         if now > self.due_date:
             self.score = 10 + (now - self.due_date).days
@@ -125,6 +139,16 @@ def print_date_histogram(dates: list[DateTime]):
         by_date[d.date()] += 1
     for date, count in sorted(by_date.items()):
         print(date, count)
+
+
+def print_review_buckets(scores: list[ReviewScore]):
+    by_bucket = collections.defaultdict(list)
+    for s in scores:
+        by_bucket[s.review_bucket].append(s)
+    for (b, scores) in sorted(by_bucket.items()):
+        print(f"{b}:")
+        for s in scores:
+            print(f"   {s.reference}")
 
 
 def review_candidates():
@@ -153,7 +177,8 @@ def review_candidates():
     print_frequencies(frequencies)
     print_date_histogram(due_dates)
     # results.sort(key=lambda s: (-s.score, s.reference))
-    results.sort(key=lambda s: s.reference)
+    results.sort(key=lambda s: (s.review_bucket, s.reference))
+    print_review_buckets(results)
     return results
 
 
@@ -204,7 +229,7 @@ def get_audio_with_result(ref):
     return res
 
 
-def do_review(ref, prompt):
+def do_review(ref, prompt, save=True):
     print("")
 
     show_prompt(ref, prompt)
@@ -218,7 +243,8 @@ def do_review(ref, prompt):
         response={ReviewResponseAspect.READ_ALOUD},
         result=res
     )
-    save_review(r)
+    if save:
+        save_review(r)
 
     original_res = res
 
@@ -246,8 +272,8 @@ def do_increasing_difficulty_review(score: ReviewScore):
     if not image_exists(ref):
         prompt.discard(ReviewPrompAspect.IMAGE)
 
-    for i in range(3):
-        res = do_review(ref, prompt)
+    for i in range(2):
+        res = do_review(ref, prompt, save=i <= 1)
         if res != ReviewResult.EASY:
             break
         if score.purgatory_countdown != 0:
