@@ -85,7 +85,10 @@ class ReviewScore:
                     b = pendulum.instance(review.date)
                     d = b.diff(a) * 1.32
                     if d > self.frequency:
-                        self.frequency = d
+                        if d > self.frequency * 2:
+                            self.frequency = self.frequency * 2
+                        else:
+                            self.frequency = d
             elif ReviewPrompAspect.FIRST_WORD in review.prompt:
                 self.frequency += Duration(hours=12)
             elif ReviewPrompAspect.FIRST_LETTERS in review.prompt:
@@ -201,12 +204,12 @@ def do_override_prompt(result):
         return result
 
 
-def get_audio_with_result(ref):
+def get_audio_with_result(ref, engine=None):
     def test(text):
         diffres = fuzzydiff(verses[ref], text)
         return not diffres.appears_unfinished()
 
-    audio_res = get_audio(test)
+    audio_res = get_audio(test, engine)
 
     diffres = fuzzydiff(verses[ref], audio_res)
 
@@ -229,12 +232,12 @@ def get_audio_with_result(ref):
     return res
 
 
-def do_review(ref, prompt, save=True):
+def do_review(ref, prompt, save=True, engine=None):
     print("")
 
     show_prompt(ref, prompt)
 
-    res = get_audio_with_result(ref)
+    res = get_audio_with_result(ref, engine)
 
     r = Review(
         reference=ref,
@@ -250,12 +253,12 @@ def do_review(ref, prompt, save=True):
 
     while res != ReviewResult.EASY:
         time.sleep(2)
-        res = get_audio_with_result(ref)
+        res = get_audio_with_result(ref, engine)
 
     return original_res
 
 
-def do_increasing_difficulty_review(score: ReviewScore):
+def do_increasing_difficulty_review(score: ReviewScore, engine=None):
     if score.prompt:
         prompt = set(score.prompt)
         # Always show the reference for the moment
@@ -272,8 +275,15 @@ def do_increasing_difficulty_review(score: ReviewScore):
     if not image_exists(ref):
         prompt.discard(ReviewPrompAspect.IMAGE)
 
+    final_result = None
+    
     for i in range(2):
-        res = do_review(ref, prompt, save=i <= 1)
+        res = do_review(ref, prompt, save=i <= 1, engine=engine)
+        
+        # Store the result of the first review attempt
+        if i == 0:
+            final_result = res
+            
         if res != ReviewResult.EASY:
             break
         if score.purgatory_countdown != 0:
@@ -282,11 +292,15 @@ def do_increasing_difficulty_review(score: ReviewScore):
         if new_prompt == prompt:
             break
         prompt = new_prompt
+        
+    return final_result
 
 
 @ click.command()
 @ click.option("--count", default=20)
-def review(count: int):
+@ click.option("--engine", type=click.Choice(['vosk', 'deepgram']), help="Speech recognition engine to use")
+@ click.option("--sticker", is_flag=True, help="Award a sticker after successful review")
+def review(count: int, engine: str, sticker: bool):
     candidates = review_candidates()
     num_due = 0
     num_new = 0
@@ -297,10 +311,32 @@ def review(count: int):
             num_new += 1
     print(
         f"Reviewing {min(count, num_due)} of {num_due} due and {num_new} new")
+    
+    # Display engine info
+    if engine:
+        print(f"Using speech recognition engine: {engine}")
+    else:
+        print("Using default speech recognition engine")
+        
+    # Display sticker info
+    if sticker:
+        print("You'll get a sticker for each verse you successfully review!")
+        
     candidates = candidates[:count]
+    successful_reviews = 0
+    
     for i, score in enumerate(candidates):
         print("#"*i + "-"*(len(candidates)-i))
-        do_increasing_difficulty_review(score)
+        result = do_increasing_difficulty_review(score, engine)
+        
+        # Award sticker for successful review
+        if result == ReviewResult.EASY and sticker:
+            print("\n🌟 Great job! You earned a sticker! 🌟\n")
+            successful_reviews += 1
+    
+    # Final sticker count
+    if sticker and successful_reviews > 0:
+        print(f"\nCongratulations! You earned {successful_reviews} sticker{'s' if successful_reviews > 1 else ''} today!\n")
 
 
 if __name__ == "__main__":

@@ -9,4 +9,7 @@ pendulum
 readchar
 sounddevice
 vosk
-yaml
+PyYAML
+peewee
+deepgram-sdk>=3.0.0
+structlog
