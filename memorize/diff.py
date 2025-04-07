@@ -284,27 +284,43 @@ def fuzzydiff(expected, got):
             extend(ChunkType.GOOD, expected)
         elif tag == "insert":
             # If the inserted word is a duplicate of the previous word, ignore it.
-            if len(got) == 1 and j1 > 0 and got_tokens[j1 - 1].normalized == got[0].normalized:
+            if (
+                len(got) == 1
+                and j1 > 0
+                and got_tokens[j1 - 1].normalized == got[0].normalized
+            ):
                 logging.debug(f"Ignoring duplicate inserted word: {got[0].original}")
                 continue
             # If all inserted words are fudge words, ignore them.
             if all(t.normalized in fudge_words for t in got):
-                logging.debug(f"Ignoring inserted fudge words: {[t.original for t in got]}")
+                logging.debug(
+                    f"Ignoring inserted fudge words: {[t.original for t in got]}"
+                )
                 continue
-            extend(ChunkType.ADD, got) # Changed from REMOVE to ADD - represents added text
+            extend(
+                ChunkType.ADD, got
+            )  # Changed from REMOVE to ADD - represents added text
         elif tag == "delete":
             # If all deleted words are fudge words, mark them as close instead of missing.
             if all(t.normalized in fudge_words for t in expected):
-                logging.debug(f"Marking deleted fudge words as CLOSE: {[t.original for t in expected]}")
+                logging.debug(
+                    f"Marking deleted fudge words as CLOSE: {[t.original for t in expected]}"
+                )
                 extend(ChunkType.CLOSE, expected)
             else:
-                extend(ChunkType.REMOVE, expected) # Changed from ADD to REMOVE - represents removed text
+                extend(
+                    ChunkType.REMOVE, expected
+                )  # Changed from ADD to REMOVE - represents removed text
         elif tag == "replace":
             f = fudge(expected, got)
             if f == FudgeType.EQUAL:
-                extend(ChunkType.GOOD, expected) # Use expected here as it's a good match
+                extend(
+                    ChunkType.GOOD, expected
+                )  # Use expected here as it's a good match
             elif f == FudgeType.CLOSE:
-                extend(ChunkType.CLOSE, expected) # Use expected here as it's a close match
+                extend(
+                    ChunkType.CLOSE, expected
+                )  # Use expected here as it's a close match
             else:
                 # If it's a bad replacement, mark the expected as removed and the got as added.
                 extend(ChunkType.ADD, got)
