@@ -180,14 +180,24 @@ def fudge(expected_tokens, got_tokens) -> FudgeType:
     normalized_got = {t.normalized for t in got_tokens}
     normalized_union = normalized_expected.union(normalized_got)
 
-    if normalized.issubset(fudge_words):
-        logging.info("all fudge words")
-        return FudgeType.CLOSE
+    # Check if *only* fudge words are involved in the difference
+    if normalized_union.issubset(fudge_words):
+        logging.debug("fudge: all fudge words")
+        # Treat replacement of one fudge word with another as CLOSE, but ignorable
+        return FudgeResult(FudgeType.CLOSE, FudgeReason.FUDGE_WORDS)
 
-    if normalized in fudge_pairs:
-        logging.info("fudge pair")
-        return FudgeResult(FudgeType.CLOSE, FudgeReason.FUDGE_PAIR)
+    # Check if the difference involves a defined fudge pair
+    for pair in fudge_pairs:
+        if normalized_union == pair:
+             logging.debug("fudge: fudge pair")
+             # Treat replacement within a fudge pair as CLOSE, but ignorable
+             return FudgeResult(FudgeType.CLOSE, FudgeReason.FUDGE_PAIR)
 
+    # If ratio was close enough, return CLOSE based on ratio
+    if ratio >= 50:
+        return FudgeResult(FudgeType.CLOSE, FudgeReason.RATIO_CLOSE)
+
+    # Otherwise, it's a bad difference
     return FudgeResult(FudgeType.BAD)
 
 
