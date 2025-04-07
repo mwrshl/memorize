@@ -130,10 +130,10 @@ class DiffResult:
             # If the last non-added chunk indicates something was missing, it's unfinished.
             is_unfinished = True
         elif last_significant_chunk_type is None and not self.chunks:
-             # If there are no chunks at all (implies expected text exists but got was empty), it's unfinished.
-             # Note: If expected was also empty, chunks would be empty, but int_score would be 100.
-             # This case handles `fuzzydiff("something", "")`
-             is_unfinished = True
+            # If there are no chunks at all (implies expected text exists but got was empty), it's unfinished.
+            # Note: If expected was also empty, chunks would be empty, but int_score would be 100.
+            # This case handles `fuzzydiff("something", "")`
+            is_unfinished = True
         # Otherwise (last significant chunk is GOOD or CLOSE, or only ADD chunks exist), it's finished.
         # `fuzzydiff("", "something")` -> last_significant is None, num_trailing_adds > 0 -> finished (False)
         # `fuzzydiff("test", "test extra")` -> last_significant is GOOD -> finished (False)
