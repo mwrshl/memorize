@@ -336,12 +336,13 @@ def fuzzydiff(expected, got):
                 ChunkType.ADD, got
             )  # Changed from REMOVE to ADD - represents added text
         elif tag == "delete":
-            # If all deleted words are fudge words, *ignore* them (do not add to chunks).
+            # If all deleted words are fudge words, mark them as CLOSE (yellow).
             if all(t.normalized in fudge_words for t in expected):
                 logging.debug(
-                    f"Ignoring deleted fudge words: {[t.original for t in expected]}"
+                    f"Marking deleted fudge words as CLOSE: {[t.original for t in expected]}"
                 )
-                # No chunk added
+                extend(ChunkType.CLOSE, expected)
+            # Otherwise, mark them as REMOVE (green).
             else:
                 extend(ChunkType.REMOVE, expected)
         elif tag == "replace":
