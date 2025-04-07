@@ -1,9 +1,10 @@
 import time
 import textwrap
-import subprocess
+import os.path
 from nltk.tokenize import word_tokenize
 from nltk.tokenize.treebank import TreebankWordDetokenizer
-import os.path
+from rich.console import Console
+from textual_image.renderable import Image as TermImage
 
 from . reviews import ReviewPrompAspect, verses
 
@@ -70,7 +71,9 @@ def show_prompt(ref, prompt):
         print(f"{ref}")
         time.sleep(2)
     if ReviewPrompAspect.IMAGE in prompt:
-        subprocess.run(["eog", image_file(ref)])
+        console = Console()
+        img = TermImage(image_file(ref))
+        console.print(img)
 
     text = verses[ref]
 
