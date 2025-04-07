@@ -95,7 +95,7 @@ class DiffResult:
         miss_count = add_count + remove_count + close_count * 0.25
         # Pad the total length slightly so that short verses aren't overly penalized
         # for single mistakes.
-        total = max(len(self.chunks), 1) + 5 # Reduced padding from 20
+        total = max(len(self.chunks), 1) + 5  # Reduced padding from 20
         return 1.0 - miss_count / total
 
     def int_score(self) -> int:
@@ -113,24 +113,30 @@ class DiffResult:
                 num_trailing_adds += 1
             else:
                 last_significant_chunk_type = chunk_type
-                break # Found the last non-ADD chunk
+                break  # Found the last non-ADD chunk
 
         # Determine if unfinished based on the last significant chunk
         # Allow for 1 or 2 extra words at the end without being "unfinished"
         is_unfinished = False
         if last_significant_chunk_type in (ChunkType.REMOVE, ChunkType.CLOSE):
-             is_unfinished = True
-        elif last_significant_chunk_type is None and not self.chunks: # Empty diff means unfinished
-             is_unfinished = True
+            is_unfinished = True
+        elif (
+            last_significant_chunk_type is None and not self.chunks
+        ):  # Empty diff means unfinished
+            is_unfinished = True
         # If the diff ends only with ADDs, it's not unfinished unless it's just ADDs
         elif last_significant_chunk_type is None and num_trailing_adds > 0:
-             is_unfinished = False # Ends only with additions means finished + extra
+            is_unfinished = False  # Ends only with additions means finished + extra
         elif last_significant_chunk_type == ChunkType.GOOD and num_trailing_adds <= 2:
-             is_unfinished = False # Ends with GOOD, few ADDs is ok
+            is_unfinished = False  # Ends with GOOD, few ADDs is ok
         elif last_significant_chunk_type == ChunkType.GOOD and num_trailing_adds > 2:
-             is_unfinished = True # Ends with GOOD, but too many ADDs looks weird/unfinished
+            is_unfinished = (
+                True  # Ends with GOOD, but too many ADDs looks weird/unfinished
+            )
 
-        logging.info(f"appears_unfinished: {is_unfinished} (last_significant: {last_significant_chunk_type}, trailing_adds: {num_trailing_adds})")
+        logging.info(
+            f"appears_unfinished: {is_unfinished} (last_significant: {last_significant_chunk_type}, trailing_adds: {num_trailing_adds})"
+        )
         return is_unfinished
 
     def print(self):
@@ -170,7 +176,9 @@ def fudge(expected_tokens, got_tokens) -> FudgeType:
     expected_metaphone = "".join(t.dmeta[0] for t in expected_tokens)
     got_metaphone = "".join(t.dmeta[0] for t in got_tokens)
     ratio = fuzz.ratio(expected_metaphone, got_metaphone)
-    logging.debug(f"fudge expected:{[t.original for t in expected_tokens]} got:{[t.original for t in got_tokens]} ratio:{ratio}")
+    logging.debug(
+        f"fudge expected:{[t.original for t in expected_tokens]} got:{[t.original for t in got_tokens]} ratio:{ratio}"
+    )
 
     if ratio >= 85:
         return FudgeResult(FudgeType.EQUAL, FudgeReason.RATIO_EQUAL)
@@ -189,9 +197,9 @@ def fudge(expected_tokens, got_tokens) -> FudgeType:
     # Check if the difference involves a defined fudge pair
     for pair in fudge_pairs:
         if normalized_union == pair:
-             logging.debug("fudge: fudge pair")
-             # Treat replacement within a fudge pair as CLOSE, but ignorable
-             return FudgeResult(FudgeType.CLOSE, FudgeReason.FUDGE_PAIR)
+            logging.debug("fudge: fudge pair")
+            # Treat replacement within a fudge pair as CLOSE, but ignorable
+            return FudgeResult(FudgeType.CLOSE, FudgeReason.FUDGE_PAIR)
 
     # If ratio was close enough, return CLOSE based on ratio
     if ratio >= 50:
@@ -327,16 +335,17 @@ def fuzzydiff(expected, got):
                 )
                 # No chunk added
             else:
-                extend(
-                    ChunkType.REMOVE, expected
-                )
+                extend(ChunkType.REMOVE, expected)
         elif tag == "replace":
             f_result = fudge(expected, got)
             # If it's an exact match OR a close match due to fudge words/pairs, treat as GOOD.
-            if f_result.type == FudgeType.EQUAL or f_result.reason in (FudgeReason.FUDGE_WORDS, FudgeReason.FUDGE_PAIR):
+            if f_result.type == FudgeType.EQUAL or f_result.reason in (
+                FudgeReason.FUDGE_WORDS,
+                FudgeReason.FUDGE_PAIR,
+            ):
                 extend(ChunkType.GOOD, expected)
             # If it's close based on ratio, mark as CLOSE.
-            elif f_result.type == FudgeType.CLOSE: # Implies reason == RATIO_CLOSE
+            elif f_result.type == FudgeType.CLOSE:  # Implies reason == RATIO_CLOSE
                 extend(ChunkType.CLOSE, expected)
             # Otherwise (BAD fudge result), mark as ADD/REMOVE.
             else:
