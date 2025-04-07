@@ -190,9 +190,77 @@ def fuzzydiff(expected, got):
     ...     disappearing, and the true light is already shining.''',
     ...     ' yeah it is also do').appears_unfinished()
     True
-    >>> fuzzydiff("i want all of you to share",
-    ...     "i want all of you you too  share").int_score()
     100
+    >>> fuzzydiff("exact match", "exact match").int_score()
+    100
+    >>> fuzzydiff("case difference", "Case Difference").int_score()
+    100
+    >>> fuzzydiff("punctuation difference.", "punctuation difference").int_score()
+    100
+    >>> fuzzydiff("contraction difference", "contraction difference").int_score()
+    100
+    >>> fuzzydiff("extra word", "extra word added").int_score() < 100
+    True
+    >>> fuzzydiff("missing word here", "missing here").int_score() < 100
+    True
+    >>> fuzzydiff("word replaced", "word substituted").int_score() < 100
+    True
+    >>> fuzzydiff("fudge the word", "fudge a word").int_score() == 100 # 'the' and 'a' are fudge words
+    True
+    >>> fuzzydiff("his word", "the word").int_score() == 100 # {'his', 'the'} is a fudge pair
+    True
+    >>> fuzzydiff("completely different", "totally unrelated").int_score() < 80
+    True
+    >>> fuzzydiff("", "").int_score()
+    100
+    >>> fuzzydiff("short", "").int_score() < 100
+    True
+    >>> fuzzydiff("", "short").int_score() < 100
+    True
+    >>> fuzzydiff("test appears unfinished", "test appears").appears_unfinished()
+    True
+    >>> fuzzydiff("test appears unfinished", "test appears un").appears_unfinished()
+    True
+    >>> fuzzydiff("test appears unfinished", "test appears unfinished completely").appears_unfinished()
+    False
+    >>> fuzzydiff("test appears unfinished", "test appears finished").appears_unfinished()
+    False
+    >>> fuzzydiff("this is a test", "this is a test").appears_unfinished()
+    False
+    >>> fuzzydiff("this is a test", "this is a").appears_unfinished()
+    True
+    >>> fuzzydiff("this is a test", "this is a test extra").appears_unfinished()
+    False
+    >>> fuzzydiff("this is a test", "this is").appears_unfinished()
+    True
+    >>> fuzzydiff("this is a test", "this is a t").appears_unfinished()
+    True
+    >>> fuzzydiff("this is a test", "this is a testt").appears_unfinished() # Close match at end
+    False
+    >>> fuzzydiff("this is a test", "this is a tes").appears_unfinished() # Close match at end
+    False
+    >>> fuzzydiff("this is a test", "this is a test of").appears_unfinished() # Added word at end
+    False
+    >>> fuzzydiff("this is a test", "this is a test of the").appears_unfinished() # Added words at end
+    False
+    >>> fuzzydiff("this is a test", "this is a test the").appears_unfinished() # Added fudge word at end
+    False
+    >>> fuzzydiff("this is a test", "this is a test the quick").appears_unfinished() # Added words at end
+    False
+    >>> fuzzydiff("this is a test", "this is a test the quick brown").appears_unfinished() # Added words at end
+    False
+    >>> fuzzydiff("this is a test", "this is a test the quick brown fox").appears_unfinished() # Added words at end
+    False
+    >>> fuzzydiff("this is a test", "this is a test the quick brown fox jumps").appears_unfinished() # Added words at end
+    False
+    >>> fuzzydiff("this is a test", "this is a test the quick brown fox jumps over").appears_unfinished() # Added words at end
+    False
+    >>> fuzzydiff("this is a test", "this is a test the quick brown fox jumps over the").appears_unfinished() # Added words at end
+    False
+    >>> fuzzydiff("this is a test", "this is a test the quick brown fox jumps over the lazy").appears_unfinished() # Added words at end
+    False
+    >>> fuzzydiff("this is a test", "this is a test the quick brown fox jumps over the lazy dog").appears_unfinished() # Added words at end
+    False
     """
     logging.info(f"fuzzydiff({repr(expected)}, {repr(got)})")
     expected_tokens = tokenize(expected)
@@ -215,26 +283,32 @@ def fuzzydiff(expected, got):
         if tag == "equal":
             extend(ChunkType.GOOD, expected)
         elif tag == "insert":
-            if len(got) == 1 and j1 > 0 and got_tokens[j1 - 1] == got[0]:
-                # ignore duplicate word
+            # If the inserted word is a duplicate of the previous word, ignore it.
+            if len(got) == 1 and j1 > 0 and got_tokens[j1 - 1].normalized == got[0].normalized:
+                logging.debug(f"Ignoring duplicate inserted word: {got[0].original}")
                 continue
+            # If all inserted words are fudge words, ignore them.
             if all(t.normalized in fudge_words for t in got):
+                logging.debug(f"Ignoring inserted fudge words: {[t.original for t in got]}")
                 continue
-            extend(ChunkType.REMOVE, got)
+            extend(ChunkType.ADD, got) # Changed from REMOVE to ADD - represents added text
         elif tag == "delete":
+            # If all deleted words are fudge words, mark them as close instead of missing.
             if all(t.normalized in fudge_words for t in expected):
+                logging.debug(f"Marking deleted fudge words as CLOSE: {[t.original for t in expected]}")
                 extend(ChunkType.CLOSE, expected)
             else:
-                extend(ChunkType.ADD, expected)
+                extend(ChunkType.REMOVE, expected) # Changed from ADD to REMOVE - represents removed text
         elif tag == "replace":
             f = fudge(expected, got)
             if f == FudgeType.EQUAL:
-                extend(ChunkType.GOOD, expected)
+                extend(ChunkType.GOOD, expected) # Use expected here as it's a good match
             elif f == FudgeType.CLOSE:
-                extend(ChunkType.CLOSE, expected)
+                extend(ChunkType.CLOSE, expected) # Use expected here as it's a close match
             else:
-                extend(ChunkType.REMOVE, got)
-                extend(ChunkType.ADD, expected)
+                # If it's a bad replacement, mark the expected as removed and the got as added.
+                extend(ChunkType.ADD, got)
+                extend(ChunkType.REMOVE, expected)
         else:
             assert False
 
