@@ -38,8 +38,10 @@ class Reference:
         return self.verse_end - self.verse + 1
 
 
-verses = dict((Reference.parse(k), v) for k, v in yaml.load(
-    open("verses.yaml"), Loader=yaml.SafeLoader).items())
+verses = dict(
+    (Reference.parse(k), v)
+    for k, v in yaml.load(open("verses.yaml"), Loader=yaml.SafeLoader).items()
+)
 
 verse_count = sum(r.verse_count() for r in verses)
 print(f"Loaded {verse_count} verses")
@@ -152,8 +154,7 @@ class Review:
 
 
 converter = cattr.preconf.json.make_converter()
-converter.register_structure_hook(
-    Reference, lambda s, _: Reference.parse(s))
+converter.register_structure_hook(Reference, lambda s, _: Reference.parse(s))
 converter.register_unstructure_hook(Reference, lambda r: str(r))
 
 
@@ -199,13 +200,13 @@ class ReviewModel(peewee.Model):
         database = db
 
     def to_review(self):
-        return Review(self.reference.to_reference(),
-                      pendulum.parse(self.date),
-                      frozenset(ReviewPrompAspect(s)
-                                for s in self.prompt.split(",")),
-                      frozenset(ReviewResponseAspect(s)
-                                for s in self.response.split(",")),
-                      ReviewResult(self.result))
+        return Review(
+            self.reference.to_reference(),
+            pendulum.parse(self.date),
+            frozenset(ReviewPrompAspect(s) for s in self.prompt.split(",")),
+            frozenset(ReviewResponseAspect(s) for s in self.response.split(",")),
+            ReviewResult(self.result),
+        )
 
 
 db.connect()
@@ -222,13 +223,15 @@ def save_review_sqlite(r):
         book=r.reference.book,
         chapter=r.reference.chapter,
         verse=r.reference.verse,
-        verse_end=r.reference.verse_end)
+        verse_end=r.reference.verse_end,
+    )
     m = ReviewModel.create(
         reference=reference,
         date=str(r.date),
         prompt=",".join(e.value for e in r.prompt),
         response=",".join(e.value for e in r.response),
-        result=r.result.value)
+        result=r.result.value,
+    )
     m.save()
 
 

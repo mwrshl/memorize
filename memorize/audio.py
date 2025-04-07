@@ -1,7 +1,6 @@
 import sounddevice as sd
 import sys
 import queue
-import json
 import logging
 import os
 from abc import ABC, abstractmethod
@@ -26,18 +25,18 @@ class SpeechRecognitionEngine(ABC):
 
 class SpeechEngineFactory:
     """Factory for creating speech recognition engines"""
-    
+
     @staticmethod
     def create_engine(engine_name):
         """
         Create and return a speech recognition engine instance
-        
+
         Args:
             engine_name: Name of the engine to create ('vosk' or 'deepgram')
-            
+
         Returns:
             A speech recognition engine instance
-        
+
         Raises:
             ImportError: If the requested engine can't be imported
         """
@@ -45,22 +44,26 @@ class SpeechEngineFactory:
             # Import Vosk engine only when needed
             try:
                 from memorize.vosk_engine import VoskEngine
+
                 logging.info("Using Vosk speech recognition engine")
                 return VoskEngine(samplerate)
             except ImportError:
                 logging.error("Vosk module not found. Is it installed?")
                 raise ImportError("Vosk not installed. Install with 'pip install vosk'")
-        
+
         elif engine_name == "deepgram":
             # Import Deepgram engine only when needed
             try:
                 from memorize.deepgram_engine import DeepgramStreamEngine
+
                 logging.info("Using Deepgram speech recognition engine")
                 return DeepgramStreamEngine()
             except ImportError:
                 logging.error("Deepgram module not found. Is it installed?")
-                raise ImportError("Deepgram SDK not installed. Install with 'pip install deepgram-sdk'")
-        
+                raise ImportError(
+                    "Deepgram SDK not installed. Install with 'pip install deepgram-sdk'"
+                )
+
         else:
             logging.error(f"Unknown speech engine: {engine_name}")
             raise ValueError(f"Unknown speech engine: {engine_name}")
@@ -80,11 +83,11 @@ def get_audio(test_finished, engine=None):
     # Determine which engine to use
     if engine is None:
         engine = os.environ.get("MEMORIZE_SPEECH_ENGINE", DEFAULT_ENGINE)
-        
+
     # Set sample rate based on engine
     engine_samplerate = 16000 if engine == "deepgram" else samplerate
     logging.info(f"Using sample rate: {engine_samplerate} Hz")
-    
+
     # Create the appropriate engine using our factory
     try:
         speech_engine = SpeechEngineFactory.create_engine(engine)
@@ -98,7 +101,9 @@ def get_audio(test_finished, engine=None):
                 engine = "deepgram"
                 engine_samplerate = 16000
             except ImportError:
-                raise RuntimeError("No speech recognition engines available. Please install either vosk or deepgram-sdk.")
+                raise RuntimeError(
+                    "No speech recognition engines available. Please install either vosk or deepgram-sdk."
+                )
         else:
             logging.info("Falling back to Vosk engine")
             try:
@@ -106,13 +111,15 @@ def get_audio(test_finished, engine=None):
                 engine = "vosk"
                 engine_samplerate = samplerate
             except ImportError:
-                raise RuntimeError("No speech recognition engines available. Please install either vosk or deepgram-sdk.")
+                raise RuntimeError(
+                    "No speech recognition engines available. Please install either vosk or deepgram-sdk."
+                )
 
     # Set up audio recording
     q = queue.Queue()
-    
+
     # The sample rate has already been set above
-    
+
     def callback(indata, frames, time, status):
         """This is called (from a separate thread) for each audio block."""
         if status:

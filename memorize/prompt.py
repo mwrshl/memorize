@@ -6,7 +6,7 @@ from nltk.tokenize.treebank import TreebankWordDetokenizer
 from rich.console import Console
 from textual_image.renderable import Image as TermImage
 
-from . reviews import ReviewPrompAspect, verses
+from .reviews import ReviewPrompAspect, verses
 
 
 def _ending_underscore(text):
@@ -27,13 +27,14 @@ def _ending_underscore(text):
 
     def underscore_ending(word):
         if len(word) > 3:
-            return word[0] + "_" * (len(word)-1)
+            return word[0] + "_" * (len(word) - 1)
         else:
             return word
+
     tokens = word_tokenize(text)
     tokens = [underscore_ending(word) for word in tokens]
     text = TreebankWordDetokenizer().detokenize(tokens)
-    print('\n'.join(textwrap.wrap(text)))
+    print("\n".join(textwrap.wrap(text)))
 
 
 def _first_letters(text, should_show=lambda idx: True):
@@ -48,13 +49,12 @@ def _first_letters(text, should_show=lambda idx: True):
     ...                lambda i: not (i//4)%2)
     A G s t _ _ _
     """
-    for c in "\"“”.,?!—":
+    for c in '"“”.,?!—':
         text = text.replace(c, " ")
     tokens = text.split()
-    tokens = [(word[0] if should_show(i) else '_')
-              for (i, word) in enumerate(tokens)]
+    tokens = [(word[0] if should_show(i) else "_") for (i, word) in enumerate(tokens)]
     text = " ".join(tokens)
-    print('\n'.join(textwrap.wrap(text)))
+    print("\n".join(textwrap.wrap(text)))
 
 
 def image_file(ref):
@@ -66,7 +66,7 @@ def image_exists(ref):
 
 
 def show_prompt(ref, prompt):
-    print("-"*80)
+    print("-" * 80)
     if ReviewPrompAspect.REFERENCE in prompt:
         print(f"{ref}")
         time.sleep(2)
@@ -78,7 +78,7 @@ def show_prompt(ref, prompt):
     text = verses[ref]
 
     if ReviewPrompAspect.FULL_TEXT in prompt:
-        print('\n'.join(textwrap.wrap(text)))
+        print("\n".join(textwrap.wrap(text)))
 
     if ReviewPrompAspect.ENDING_UNDERSCORE in prompt:
         _ending_underscore(text)
@@ -99,7 +99,7 @@ def show_prompt(ref, prompt):
         _first_letters(text, lambda idx: (idx % 5) < 1)
 
     if ReviewPrompAspect.FIRST_LETTERS_5 in prompt:
-        _first_letters(text, lambda idx: ((idx//5) % 2) == 0)
+        _first_letters(text, lambda idx: ((idx // 5) % 2) == 0)
 
     if ReviewPrompAspect.FIRST_WORD in prompt:
         tokens = word_tokenize(text)
@@ -111,4 +111,5 @@ def show_prompt(ref, prompt):
 
 if __name__ == "__main__":
     import doctest
+
     doctest.testmod()

@@ -6,17 +6,25 @@ from pendulum import Duration, DateTime
 import logging
 import readchar
 
-from . diff import fuzzydiff
-from . audio import get_audio
+from .diff import fuzzydiff
+from .audio import get_audio
 
 
-from . reviews import (verses, ReviewPrompAspect,
-                       Review, Reference, ReviewResponseAspect, ReviewResult,
-                       step_up_difficulty, step_down_difficulty,
-                       deprecated_text_prompts,
-                       all_reviews, save_review)
+from .reviews import (
+    verses,
+    ReviewPrompAspect,
+    Review,
+    Reference,
+    ReviewResponseAspect,
+    ReviewResult,
+    step_up_difficulty,
+    step_down_difficulty,
+    deprecated_text_prompts,
+    all_reviews,
+    save_review,
+)
 
-from . prompt import show_prompt, image_exists
+from .prompt import show_prompt, image_exists
 
 
 class ReviewScore:
@@ -54,8 +62,7 @@ class ReviewScore:
             if self.purgatory_countdown:
                 self.purgatory_countdown -= 1
         if self.purgatory_countdown:
-            self.prompt = {ReviewPrompAspect.REFERENCE,
-                           ReviewPrompAspect.FIRST_LETTERS}
+            self.prompt = {ReviewPrompAspect.REFERENCE, ReviewPrompAspect.FIRST_LETTERS}
             self.frequency = Duration(hours=6)
         else:
             self.prompt = review.prompt
@@ -66,15 +73,17 @@ class ReviewScore:
             self.last_hard_or_failed = review
             self.frequency -= Duration(hours=6)
             if self.frequency > Duration(days=1):
-                self.frequency *= .3
+                self.frequency *= 0.3
         elif review.result == ReviewResult.HARD:
             self.last_hard_or_failed = review
             self.frequency -= Duration(hours=4)
             if self.frequency > Duration(days=1):
-                self.frequency *= .7
+                self.frequency *= 0.7
         elif review.result == ReviewResult.EASY:
             self.last_easy = review
-            if self.previous_easy and (review.date - self.previous_easy.date) < Duration(hours=4):
+            if self.previous_easy and (
+                review.date - self.previous_easy.date
+            ) < Duration(hours=4):
                 self.previous_easy = review
                 return
             self.previous_easy = review
@@ -119,8 +128,9 @@ class ReviewScore:
                 self.review_bucket = 1
         now = pendulum.now()
         if self.last_easy:
-            self.ratio = (now - self.last_easy.date) / \
-                (self.due_date - self.last_easy.date)
+            self.ratio = (now - self.last_easy.date) / (
+                self.due_date - self.last_easy.date
+            )
         else:
             self.review_bucket = 0
             self.ratio = 0
@@ -137,6 +147,7 @@ def print_frequencies(frequencies):
 
 def print_date_histogram(dates: list[DateTime]):
     import collections
+
     by_date = collections.defaultdict(lambda: 0)
     for d in dates:
         by_date[d.date()] += 1
@@ -148,7 +159,7 @@ def print_review_buckets(scores: list[ReviewScore]):
     by_bucket = collections.defaultdict(list)
     for s in scores:
         by_bucket[s.review_bucket].append(s)
-    for (b, scores) in sorted(by_bucket.items()):
+    for b, scores in sorted(by_bucket.items()):
         print(f"{b}:")
         for s in scores:
             print(f"   {s.reference}")
@@ -188,16 +199,15 @@ def review_candidates():
 def do_override_prompt(result):
     print("Override? (1:EASY, 2:HARD, 3:FAIL, Any other key: no change)")
     keys = {
-        '1': ReviewResult.EASY,
-        '2': ReviewResult.HARD,
-        '3': ReviewResult.FAIL,
+        "1": ReviewResult.EASY,
+        "2": ReviewResult.HARD,
+        "3": ReviewResult.FAIL,
     }
     c = readchar.readchar()
     if c in keys:
         res = keys[c]
         print(f"changing to {res}")
-        logging.info(
-            f"do_override_prompt Overriding result from {result} to {res}")
+        logging.info(f"do_override_prompt Overriding result from {result} to {res}")
         return res
     else:
         logging.info(f"do_override_prompt Keeping result {result}")
@@ -244,7 +254,7 @@ def do_review(ref, prompt, save=True, engine=None):
         date=pendulum.now(),
         prompt=prompt,
         response={ReviewResponseAspect.READ_ALOUD},
-        result=res
+        result=res,
     )
     if save:
         save_review(r)
@@ -264,9 +274,11 @@ def do_increasing_difficulty_review(score: ReviewScore, engine=None):
         # Always show the reference for the moment
         prompt.add(ReviewPrompAspect.REFERENCE)
     else:
-        prompt = {ReviewPrompAspect.REFERENCE,
-                  ReviewPrompAspect.FULL_TEXT,
-                  ReviewPrompAspect.IMAGE, }
+        prompt = {
+            ReviewPrompAspect.REFERENCE,
+            ReviewPrompAspect.FULL_TEXT,
+            ReviewPrompAspect.IMAGE,
+        }
     if prompt.intersection(deprecated_text_prompts):
         prompt = step_down_difficulty(prompt)
 
@@ -276,14 +288,14 @@ def do_increasing_difficulty_review(score: ReviewScore, engine=None):
         prompt.discard(ReviewPrompAspect.IMAGE)
 
     final_result = None
-    
+
     for i in range(2):
         res = do_review(ref, prompt, save=i <= 1, engine=engine)
-        
+
         # Store the result of the first review attempt
         if i == 0:
             final_result = res
-            
+
         if res != ReviewResult.EASY:
             break
         if score.purgatory_countdown != 0:
@@ -292,14 +304,18 @@ def do_increasing_difficulty_review(score: ReviewScore, engine=None):
         if new_prompt == prompt:
             break
         prompt = new_prompt
-        
+
     return final_result
 
 
-@ click.command()
-@ click.option("--count", default=20)
-@ click.option("--engine", type=click.Choice(['vosk', 'deepgram']), help="Speech recognition engine to use")
-@ click.option("--sticker", is_flag=True, help="Award a sticker after successful review")
+@click.command()
+@click.option("--count", default=20)
+@click.option(
+    "--engine",
+    type=click.Choice(["vosk", "deepgram"]),
+    help="Speech recognition engine to use",
+)
+@click.option("--sticker", is_flag=True, help="Award a sticker after successful review")
 def review(count: int, engine: str, sticker: bool):
     candidates = review_candidates()
     num_due = 0
@@ -309,37 +325,37 @@ def review(count: int, engine: str, sticker: bool):
             num_due += 1
         elif score.score == 1:
             num_new += 1
-    print(
-        f"Reviewing {min(count, num_due)} of {num_due} due and {num_new} new")
-    
+    print(f"Reviewing {min(count, num_due)} of {num_due} due and {num_new} new")
+
     # Display engine info
     if engine:
         print(f"Using speech recognition engine: {engine}")
     else:
         print("Using default speech recognition engine")
-        
+
     # Display sticker info
     if sticker:
         print("You'll get a sticker for each verse you successfully review!")
-        
+
     candidates = candidates[:count]
     successful_reviews = 0
-    
+
     for i, score in enumerate(candidates):
-        print("#"*i + "-"*(len(candidates)-i))
+        print("#" * i + "-" * (len(candidates) - i))
         result = do_increasing_difficulty_review(score, engine)
-        
+
         # Award sticker for successful review
         if result == ReviewResult.EASY and sticker:
             print("\n🌟 Great job! You earned a sticker! 🌟\n")
             successful_reviews += 1
-    
+
     # Final sticker count
     if sticker and successful_reviews > 0:
-        print(f"\nCongratulations! You earned {successful_reviews} sticker{'s' if successful_reviews > 1 else ''} today!\n")
+        print(
+            f"\nCongratulations! You earned {successful_reviews} sticker{'s' if successful_reviews > 1 else ''} today!\n"
+        )
 
 
 if __name__ == "__main__":
-    logging.basicConfig(filename="mem.log",
-                        encoding="utf-8", level=logging.INFO)
+    logging.basicConfig(filename="mem.log", encoding="utf-8", level=logging.INFO)
     review()

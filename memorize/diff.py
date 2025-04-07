@@ -38,16 +38,16 @@ class Token:
 
 
 class Colors:
-    HEADER = '\033[95m'
-    OKBLUE = '\033[94m'
-    OKCYAN = '\033[96m'
-    OKGREEN = '\033[92m'
-    WARNING = '\033[93m'
-    FAIL = '\033[91m'
-    ENDC = '\033[0m'
-    BOLD = '\033[1m'
-    UNDERLINE = '\033[4m'
-    STRIKETHROUGH = '\033[9m'
+    HEADER = "\033[95m"
+    OKBLUE = "\033[94m"
+    OKCYAN = "\033[96m"
+    OKGREEN = "\033[92m"
+    WARNING = "\033[93m"
+    FAIL = "\033[91m"
+    ENDC = "\033[0m"
+    BOLD = "\033[1m"
+    UNDERLINE = "\033[4m"
+    STRIKETHROUGH = "\033[9m"
 
 
 def tokenize(s):
@@ -57,18 +57,16 @@ def tokenize(s):
     >>> [t.normalized for t in tokenize("who are God’s children")]
     ['who', 'are', 'gods', 'children']
     """
-    remove_chars = "“”.,\"-():;?"
+    remove_chars = '“”.,"-():;?'
     for c in remove_chars:
         s = s.replace(c, "")
     s = s.replace("—", " ")
     s = s.replace("’", "'")
     tokens = []
     for t in contractions.fix(s).split():
-        normalized = t.lower().replace("'", '').replace('\"', '')
+        normalized = t.lower().replace("'", "").replace('"', "")
         dmeta = metaphone.doublemetaphone(normalized)
-        tokens.append(Token(original=t,
-                            normalized=normalized,
-                            dmeta=dmeta))
+        tokens.append(Token(original=t, normalized=normalized, dmeta=dmeta))
     return tokens
 
 
@@ -87,11 +85,11 @@ class DiffResult:
                 close_count += 1
             elif ty == ChunkType.REMOVE:
                 remove_count += 1
-        miss_count = add_count + remove_count + close_count * .25
+        miss_count = add_count + remove_count + close_count * 0.25
         # Pad the total length so that short verses aren't scored too low when
         # they have a single mistake.
         total = len(self.chunks) + 20
-        return 1. - miss_count / total
+        return 1.0 - miss_count / total
 
     def int_score(self) -> int:
         return int(self.score() * 100)
@@ -134,7 +132,7 @@ def print_diff_chunks(outputs, line_width=80):
     width = 0
     chunks = []
     colors = {
-        ChunkType.GOOD: '',
+        ChunkType.GOOD: "",
         ChunkType.ADD: Colors.OKGREEN,
         ChunkType.REMOVE: Colors.STRIKETHROUGH + Colors.FAIL,
         ChunkType.CLOSE: Colors.WARNING,
@@ -163,8 +161,7 @@ def fudge(expected_tokens, got_tokens) -> FudgeType:
     expected_metaphone = "".join(t.dmeta[0] for t in expected_tokens)
     got_metaphone = "".join(t.dmeta[0] for t in got_tokens)
     ratio = fuzz.ratio(expected_metaphone, got_metaphone)
-    logging.info(
-        f"fudge expected:{expected_tokens} got:{got_tokens} ratio:{ratio}")
+    logging.info(f"fudge expected:{expected_tokens} got:{got_tokens} ratio:{ratio}")
 
     if ratio >= 85:
         return FudgeType.EQUAL
@@ -201,9 +198,11 @@ def fuzzydiff(expected, got):
     expected_tokens = tokenize(expected)
     got_tokens = tokenize(got)
 
-    sm = difflib.SequenceMatcher(None,
-                                 [t.diffable() for t in expected_tokens],
-                                 [t.diffable() for t in got_tokens])
+    sm = difflib.SequenceMatcher(
+        None,
+        [t.diffable() for t in expected_tokens],
+        [t.diffable() for t in got_tokens],
+    )
     outputs = []
 
     def extend(chunk_type, tokens):
@@ -216,7 +215,7 @@ def fuzzydiff(expected, got):
         if tag == "equal":
             extend(ChunkType.GOOD, expected)
         elif tag == "insert":
-            if len(got) == 1 and j1 > 0 and got_tokens[j1-1] == got[0]:
+            if len(got) == 1 and j1 > 0 and got_tokens[j1 - 1] == got[0]:
                 # ignore duplicate word
                 continue
             if all(t.normalized in fudge_words for t in got):
@@ -237,12 +236,14 @@ def fuzzydiff(expected, got):
                 extend(ChunkType.REMOVE, got)
                 extend(ChunkType.ADD, expected)
         else:
-            assert(False)
+            assert False
 
     # Sometimes we get an extra word at the beginning
-    if (outputs
-            and outputs[0][0] == ChunkType.REMOVE
-            and outputs[0][1].normalized in fudge_words):
+    if (
+        outputs
+        and outputs[0][0] == ChunkType.REMOVE
+        and outputs[0][1].normalized in fudge_words
+    ):
         logging.info("fuzzydiff: removing starting fudge word")
         outputs = outputs[1:]
 
@@ -255,4 +256,5 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG)
 
     import doctest
+
     doctest.testmod()
