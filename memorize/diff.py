@@ -20,6 +20,13 @@ class ChunkType(enum.Enum):
     ADD = "add"
 
 
+@enum.unique
+class FudgeType(enum.Enum):
+    EQUAL = "equal"
+    CLOSE = "close"
+    BAD = "bad"
+
+
 class FudgeReason(enum.Enum):
     NONE = "none"
     RATIO_EQUAL = "ratio_equal"
@@ -171,7 +178,7 @@ def print_diff_chunks(outputs, line_width=80):
     print("".join(chunks) + Colors.ENDC)
 
 
-def fudge(expected_tokens, got_tokens) -> FudgeType:
+def fudge(expected_tokens, got_tokens) -> FudgeResult:
     # Give one last chance to be a match
     expected_metaphone = "".join(t.dmeta[0] for t in expected_tokens)
     got_metaphone = "".join(t.dmeta[0] for t in got_tokens)
