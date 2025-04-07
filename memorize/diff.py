@@ -122,24 +122,22 @@ class DiffResult:
                 last_significant_chunk_type = chunk_type
                 break  # Found the last non-ADD chunk
 
-        # Determine if unfinished based on the last significant chunk
-        # Allow for 1 or 2 extra words at the end without being "unfinished"
+        # Determine if unfinished based on the last significant chunk.
+        # It's unfinished only if the user stopped short (REMOVE)
+        # or provided nothing when something was expected.
         is_unfinished = False
-        if last_significant_chunk_type in (ChunkType.REMOVE, ChunkType.CLOSE):
+        if last_significant_chunk_type == ChunkType.REMOVE:
+            # If the last non-added chunk indicates something was missing, it's unfinished.
             is_unfinished = True
-        elif (
-            last_significant_chunk_type is None and not self.chunks
-        ):  # Empty diff means unfinished
-            is_unfinished = True
-        # If the diff ends only with ADDs, it's not unfinished unless it's just ADDs
-        elif last_significant_chunk_type is None and num_trailing_adds > 0:
-            is_unfinished = False  # Ends only with additions means finished + extra
-        elif last_significant_chunk_type == ChunkType.GOOD and num_trailing_adds <= 2:
-            is_unfinished = False  # Ends with GOOD, few ADDs is ok
-        elif last_significant_chunk_type == ChunkType.GOOD and num_trailing_adds > 2:
-            is_unfinished = (
-                True  # Ends with GOOD, but too many ADDs looks weird/unfinished
-            )
+        elif last_significant_chunk_type is None and not self.chunks:
+             # If there are no chunks at all (implies expected text exists but got was empty), it's unfinished.
+             # Note: If expected was also empty, chunks would be empty, but int_score would be 100.
+             # This case handles `fuzzydiff("something", "")`
+             is_unfinished = True
+        # Otherwise (last significant chunk is GOOD or CLOSE, or only ADD chunks exist), it's finished.
+        # `fuzzydiff("", "something")` -> last_significant is None, num_trailing_adds > 0 -> finished (False)
+        # `fuzzydiff("test", "test extra")` -> last_significant is GOOD -> finished (False)
+        # `fuzzydiff("test", "tes")` -> last_significant is CLOSE -> finished (False)
 
         logging.info(
             f"appears_unfinished: {is_unfinished} (last_significant: {last_significant_chunk_type}, trailing_adds: {num_trailing_adds})"
