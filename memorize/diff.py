@@ -155,9 +155,10 @@ def print_diff_chunks(outputs, line_width=80):
     chunks = []
     colors = {
         ChunkType.GOOD: "",
-        ChunkType.ADD: Colors.STRIKETHROUGH + Colors.FAIL, # User added unexpected word (mark for removal)
-        ChunkType.REMOVE: Colors.OKGREEN, # User missed expected word (mark for addition)
-        ChunkType.CLOSE: Colors.WARNING, # User said similar word
+        ChunkType.ADD: Colors.STRIKETHROUGH
+        + Colors.FAIL,  # User added unexpected word (mark for removal)
+        ChunkType.REMOVE: Colors.OKGREEN,  # User missed expected word (mark for addition)
+        ChunkType.CLOSE: Colors.WARNING,  # User said similar word
     }
     for result, token in outputs:
         text = token.original
