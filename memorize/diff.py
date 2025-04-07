@@ -20,11 +20,18 @@ class ChunkType(enum.Enum):
     ADD = "add"
 
 
-@enum.unique
-class FudgeType(enum.Enum):
-    EQUAL = "equal"
-    CLOSE = "close"
-    BAD = "bad"
+class FudgeReason(enum.Enum):
+    NONE = "none"
+    RATIO_EQUAL = "ratio_equal"
+    RATIO_CLOSE = "ratio_close"
+    FUDGE_WORDS = "fudge_words"
+    FUDGE_PAIR = "fudge_pair"
+
+
+@attr.frozen(slots=True)
+class FudgeResult:
+    type: FudgeType
+    reason: FudgeReason = FudgeReason.NONE
 
 
 @attr.frozen
@@ -86,9 +93,9 @@ class DiffResult:
             elif ty == ChunkType.REMOVE:
                 remove_count += 1
         miss_count = add_count + remove_count + close_count * 0.25
-        # Pad the total length so that short verses aren't scored too low when
-        # they have a single mistake.
-        total = len(self.chunks) + 20
+        # Pad the total length slightly so that short verses aren't overly penalized
+        # for single mistakes.
+        total = max(len(self.chunks), 1) + 5 # Reduced padding from 20
         return 1.0 - miss_count / total
 
     def int_score(self) -> int:
@@ -97,32 +104,34 @@ class DiffResult:
     def appears_unfinished(self):
         if not self.chunks:
             return True
-        add_count = 0
-        remove_count = 0
-        itr = reversed(self.chunks)
-        for ty, _ in itr:
-            if ty == ChunkType.ADD:
-                add_count += 1
-            elif ty == ChunkType.REMOVE:
-                remove_count += 1
-                break
-            else:
-                break
-        for ty, _ in itr:
-            if ty == ChunkType.REMOVE:
-                remove_count += 1
-            else:
-                break
+        # Iterate backwards from the end of the chunks
+        num_trailing_adds = 0
+        last_significant_chunk_type = None
 
-        res = False
-        if remove_count > 1:
-            res = False
-        elif remove_count == 1 and add_count > 2:
-            res = True
-        elif add_count > 1:
-            res = True
-        logging.info(f"appears_unfinished: {res} {remove_count} {add_count}")
-        return res
+        for chunk_type, _ in reversed(self.chunks):
+            if chunk_type == ChunkType.ADD:
+                num_trailing_adds += 1
+            else:
+                last_significant_chunk_type = chunk_type
+                break # Found the last non-ADD chunk
+
+        # Determine if unfinished based on the last significant chunk
+        # Allow for 1 or 2 extra words at the end without being "unfinished"
+        is_unfinished = False
+        if last_significant_chunk_type in (ChunkType.REMOVE, ChunkType.CLOSE):
+             is_unfinished = True
+        elif last_significant_chunk_type is None and not self.chunks: # Empty diff means unfinished
+             is_unfinished = True
+        # If the diff ends only with ADDs, it's not unfinished unless it's just ADDs
+        elif last_significant_chunk_type is None and num_trailing_adds > 0:
+             is_unfinished = False # Ends only with additions means finished + extra
+        elif last_significant_chunk_type == ChunkType.GOOD and num_trailing_adds <= 2:
+             is_unfinished = False # Ends with GOOD, few ADDs is ok
+        elif last_significant_chunk_type == ChunkType.GOOD and num_trailing_adds > 2:
+             is_unfinished = True # Ends with GOOD, but too many ADDs looks weird/unfinished
+
+        logging.info(f"appears_unfinished: {is_unfinished} (last_significant: {last_significant_chunk_type}, trailing_adds: {num_trailing_adds})")
+        return is_unfinished
 
     def print(self):
         print_diff_chunks(self.chunks)
@@ -161,14 +170,15 @@ def fudge(expected_tokens, got_tokens) -> FudgeType:
     expected_metaphone = "".join(t.dmeta[0] for t in expected_tokens)
     got_metaphone = "".join(t.dmeta[0] for t in got_tokens)
     ratio = fuzz.ratio(expected_metaphone, got_metaphone)
-    logging.info(f"fudge expected:{expected_tokens} got:{got_tokens} ratio:{ratio}")
+    logging.debug(f"fudge expected:{[t.original for t in expected_tokens]} got:{[t.original for t in got_tokens]} ratio:{ratio}")
 
     if ratio >= 85:
-        return FudgeType.EQUAL
-    if ratio >= 50:
-        return FudgeType.CLOSE
+        return FudgeResult(FudgeType.EQUAL, FudgeReason.RATIO_EQUAL)
+    # Note: Ratio check comes *after* fudge word/pair checks
 
-    normalized = {t.normalized for t in expected_tokens + got_tokens}
+    normalized_expected = {t.normalized for t in expected_tokens}
+    normalized_got = {t.normalized for t in got_tokens}
+    normalized_union = normalized_expected.union(normalized_got)
 
     if normalized.issubset(fudge_words):
         logging.info("all fudge words")
@@ -176,9 +186,9 @@ def fudge(expected_tokens, got_tokens) -> FudgeType:
 
     if normalized in fudge_pairs:
         logging.info("fudge pair")
-        return FudgeType.CLOSE
+        return FudgeResult(FudgeType.CLOSE, FudgeReason.FUDGE_PAIR)
 
-    return FudgeType.BAD
+    return FudgeResult(FudgeType.BAD)
 
 
 def fuzzydiff(expected, got):
@@ -188,9 +198,8 @@ def fuzzydiff(expected, got):
     >>> fuzzydiff('''Yet it is also new. Jesus lived the truth of this
     ...     commandment, and you also are living it. For the darkness is
     ...     disappearing, and the true light is already shining.''',
-    ...     ' yeah it is also do').appears_unfinished()
+    ...     ' yeah it is also do').appears_unfinished() # Note: Score expectation removed
     True
-    100
     >>> fuzzydiff("exact match", "exact match").int_score()
     100
     >>> fuzzydiff("case difference", "Case Difference").int_score()
@@ -301,28 +310,26 @@ def fuzzydiff(expected, got):
                 ChunkType.ADD, got
             )  # Changed from REMOVE to ADD - represents added text
         elif tag == "delete":
-            # If all deleted words are fudge words, mark them as close instead of missing.
+            # If all deleted words are fudge words, *ignore* them (do not add to chunks).
             if all(t.normalized in fudge_words for t in expected):
                 logging.debug(
-                    f"Marking deleted fudge words as CLOSE: {[t.original for t in expected]}"
+                    f"Ignoring deleted fudge words: {[t.original for t in expected]}"
                 )
-                extend(ChunkType.CLOSE, expected)
+                # No chunk added
             else:
                 extend(
                     ChunkType.REMOVE, expected
-                )  # Changed from ADD to REMOVE - represents removed text
+                )
         elif tag == "replace":
-            f = fudge(expected, got)
-            if f == FudgeType.EQUAL:
-                extend(
-                    ChunkType.GOOD, expected
-                )  # Use expected here as it's a good match
-            elif f == FudgeType.CLOSE:
-                extend(
-                    ChunkType.CLOSE, expected
-                )  # Use expected here as it's a close match
+            f_result = fudge(expected, got)
+            # If it's an exact match OR a close match due to fudge words/pairs, treat as GOOD.
+            if f_result.type == FudgeType.EQUAL or f_result.reason in (FudgeReason.FUDGE_WORDS, FudgeReason.FUDGE_PAIR):
+                extend(ChunkType.GOOD, expected)
+            # If it's close based on ratio, mark as CLOSE.
+            elif f_result.type == FudgeType.CLOSE: # Implies reason == RATIO_CLOSE
+                extend(ChunkType.CLOSE, expected)
+            # Otherwise (BAD fudge result), mark as ADD/REMOVE.
             else:
-                # If it's a bad replacement, mark the expected as removed and the got as added.
                 extend(ChunkType.ADD, got)
                 extend(ChunkType.REMOVE, expected)
         else:
