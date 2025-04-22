@@ -315,8 +315,7 @@ def do_increasing_difficulty_review(score: ReviewScore, engine=None):
     type=click.Choice(["vosk", "deepgram"]),
     help="Speech recognition engine to use",
 )
-@click.option("--sticker", is_flag=True, help="Award a sticker after successful review")
-def review(count: int, engine: str, sticker: bool):
+def review(count: int, engine: str):
     candidates = review_candidates()
     num_due = 0
     num_new = 0
@@ -333,27 +332,11 @@ def review(count: int, engine: str, sticker: bool):
     else:
         print("Using default speech recognition engine")
 
-    # Display sticker info
-    if sticker:
-        print("You'll get a sticker for each verse you successfully review!")
-
     candidates = candidates[:count]
-    successful_reviews = 0
 
     for i, score in enumerate(candidates):
         print("#" * i + "-" * (len(candidates) - i))
-        result = do_increasing_difficulty_review(score, engine)
-
-        # Award sticker for successful review
-        if result == ReviewResult.EASY and sticker:
-            print("\n🌟 Great job! You earned a sticker! 🌟\n")
-            successful_reviews += 1
-
-    # Final sticker count
-    if sticker and successful_reviews > 0:
-        print(
-            f"\nCongratulations! You earned {successful_reviews} sticker{'s' if successful_reviews > 1 else ''} today!\n"
-        )
+        do_increasing_difficulty_review(score, engine)
 
 
 if __name__ == "__main__":
