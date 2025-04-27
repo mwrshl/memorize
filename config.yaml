@@ -1,0 +1,6 @@
+# Default configuration
+reviews:
+  daily_limit: 20
+  count: 20
+speech:
+  engine: deepgram

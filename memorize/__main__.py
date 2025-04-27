@@ -2,12 +2,14 @@ import pendulum
 import click
 import collections
 import time
+import os
 from pendulum import Duration, DateTime
 import logging
 import readchar
 
 from .diff import fuzzydiff
 from .audio import get_audio
+from .config import load_config
 
 
 from .reviews import (
@@ -155,16 +157,6 @@ def print_date_histogram(dates: list[DateTime]):
         print(date, count)
 
 
-def print_review_buckets(scores: list[ReviewScore]):
-    by_bucket = collections.defaultdict(list)
-    for s in scores:
-        by_bucket[s.review_bucket].append(s)
-    for b, scores in sorted(by_bucket.items()):
-        print(f"{b}:")
-        for s in scores:
-            print(f"   {s.reference}")
-
-
 def review_candidates():
     reviews_by_reference = {}
     for reference in verses:
@@ -196,22 +188,32 @@ def review_candidates():
     return results
 
 
-def do_override_prompt(result):
-    print("Override? (1:EASY, 2:HARD, 3:FAIL, Any other key: no change)")
-    keys = {
-        "1": ReviewResult.EASY,
-        "2": ReviewResult.HARD,
-        "3": ReviewResult.FAIL,
-    }
-    c = readchar.readchar()
-    if c in keys:
-        res = keys[c]
-        print(f"changing to {res}")
-        logging.info(f"do_override_prompt Overriding result from {result} to {res}")
-        return res
-    else:
-        logging.info(f"do_override_prompt Keeping result {result}")
-        return result
+def print_review_buckets(scores: list[ReviewScore]):
+    by_bucket = collections.defaultdict(list)
+    for s in scores:
+        by_bucket[s.review_bucket].append(s)
+    for b, scores in sorted(by_bucket.items()):
+        print(f"{b}:")
+        for s in scores:
+            print(f"   {s.reference}")
+
+
+def count_todays_reviews():
+    """Count the number of reviews completed today."""
+    from .reviews import ReviewModel
+    import peewee
+    
+    today = pendulum.today()
+    today_start = today.start_of('day').to_datetime_string()
+    today_end = today.end_of('day').to_datetime_string()
+    
+    # Query for reviews completed today
+    today_reviews = ReviewModel.select().where(
+        (ReviewModel.date >= today_start) & 
+        (ReviewModel.date <= today_end)
+    ).count()
+    
+    return today_reviews
 
 
 def get_audio_with_result(ref, engine=None):
@@ -309,13 +311,34 @@ def do_increasing_difficulty_review(score: ReviewScore, engine=None):
 
 
 @click.command()
-@click.option("--count", default=20)
+@click.option("--config", help="Path to config file")
+@click.option("--count", help="Number of verses to review")
 @click.option(
     "--engine",
     type=click.Choice(["vosk", "deepgram"]),
     help="Speech recognition engine to use",
 )
-def review(count: int, engine: str):
+@click.option(
+    "--daily-limit",
+    type=int,
+    help="Maximum number of reviews per day",
+)
+def review(count: int = None, engine: str = None, daily_limit: int = None, config: str = None):
+    # Load configuration
+    if config and os.path.exists(config):
+        # Override default config path
+        os.environ["MEMORIZE_CONFIG_PATH"] = config
+    
+    cfg = load_config()
+    
+    # CLI options override config file
+    if count is None:
+        count = cfg["reviews"]["count"]
+    if engine is None:
+        engine = cfg["speech"]["engine"]
+    if daily_limit is None:
+        daily_limit = cfg["reviews"]["daily_limit"]
+    
     candidates = review_candidates()
     num_due = 0
     num_new = 0
@@ -324,19 +347,42 @@ def review(count: int, engine: str):
             num_due += 1
         elif score.score == 1:
             num_new += 1
-    print(f"Reviewing {min(count, num_due)} of {num_due} due and {num_new} new")
+    
+    # Check daily limit
+    today = pendulum.today()
+    today_reviews_count = count_todays_reviews()
+    remaining_reviews = max(0, daily_limit - today_reviews_count)
+    
+    print(f"Daily review limit: {daily_limit}, completed today: {today_reviews_count}, remaining: {remaining_reviews}")
+    print(f"Reviewing {min(count, num_due, remaining_reviews)} of {num_due} due and {num_new} new")
 
     # Display engine info
-    if engine:
-        print(f"Using speech recognition engine: {engine}")
-    else:
-        print("Using default speech recognition engine")
+    print(f"Using speech recognition engine: {engine}")
 
-    candidates = candidates[:count]
+    # Limit by both count and daily limit
+    candidates = candidates[:min(count, remaining_reviews)]
 
     for i, score in enumerate(candidates):
         print("#" * i + "-" * (len(candidates) - i))
         do_increasing_difficulty_review(score, engine)
+
+
+def do_override_prompt(result):
+    print("Override? (1:EASY, 2:HARD, 3:FAIL, Any other key: no change)")
+    keys = {
+        "1": ReviewResult.EASY,
+        "2": ReviewResult.HARD,
+        "3": ReviewResult.FAIL,
+    }
+    c = readchar.readchar()
+    if c in keys:
+        res = keys[c]
+        print(f"changing to {res}")
+        logging.info(f"do_override_prompt Overriding result from {result} to {res}")
+        return res
+    else:
+        logging.info(f"do_override_prompt Keeping result {result}")
+        return result
 
 
 if __name__ == "__main__":
